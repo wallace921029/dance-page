@@ -1,0 +1,404 @@
+<title>dance-page 风格提案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@600;700&family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=ZCOOL+XiaoWei&display=swap">
+<style>
+:root{
+  --bg:#F6F5F2; --surface:#FFFFFF; --ink:#1F1E1B; --muted:#67635C; --line:#E3DFD7;
+  --accent:#2F5D8C; --accent-soft:#E4ECF5; --bezel:#1C1C20; --bezel-edge:#2C2C31;
+  --sans:'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;
+  --serif:'Noto Serif SC','Songti SC','STSong',serif;
+  --kuaile:'ZCOOL KuaiLe','Noto Sans SC',system-ui,sans-serif;
+  --xiaowei:'ZCOOL XiaoWei','Noto Serif SC',serif;
+  --huangyou:'ZCOOL QingKe HuangYou','ZCOOL KuaiLe',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141518; --surface:#1D1E22; --ink:#ECEAE5; --muted:#A39E96; --line:#303137;
+    --accent:#8FB3DE; --accent-soft:#22303F; --bezel:#0B0B0D; --bezel-edge:#3A3B41;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141518; --surface:#1D1E22; --ink:#ECEAE5; --muted:#A39E96; --line:#303137;
+  --accent:#8FB3DE; --accent-soft:#22303F; --bezel:#0B0B0D; --bezel-edge:#3A3B41;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.7;margin:0}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:20px;padding-block:40px 64px}
+h1,h2,h3{text-wrap:balance;line-height:1.3;margin:0}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+header.top{display:grid;gap:12px;max-width:68ch;margin-bottom:28px}
+header.top h1{font-size:34px;font-weight:700}
+header.top p{margin:0;color:var(--muted)}
+nav.jump{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:40px}
+nav.jump a{color:var(--ink);text-decoration:none;border:1px solid var(--line);background:var(--surface);padding:6px 14px;border-radius:999px;font-size:14px}
+nav.jump a:hover,nav.jump a:focus-visible{border-color:var(--accent);outline:none}
+nav.jump b{color:var(--accent);margin-right:6px}
+
+section.opt{display:grid;gap:20px;padding-block:36px;border-top:1px solid var(--line)}
+.opt-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px}
+.opt-head .letter{font-size:14px;font-weight:700;color:var(--accent);border:1.5px solid var(--accent);border-radius:6px;padding:0 8px}
+.opt-head h2{font-size:26px}
+.opt-head .pick{font-size:12px;font-weight:700;background:var(--accent);color:var(--bg);border-radius:4px;padding:2px 8px;letter-spacing:.06em}
+.opt-head .tag{color:var(--muted);flex-basis:100%;margin:0;max-width:70ch}
+
+.mocks{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+figure{margin:0;display:grid;gap:8px}
+figcaption{font-size:13px;color:var(--muted)}
+.mw{container-type:inline-size}
+.device{background:var(--bezel);border:1px solid var(--bezel-edge);border-radius:4.5cqw;padding:2.6cqw}
+.screen{container-type:inline-size;position:relative;aspect-ratio:4/3;border-radius:1.4cqw;overflow:hidden}
+
+.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.meta h3{font-size:13px;font-weight:500;color:var(--muted);margin-bottom:6px;letter-spacing:.04em}
+.meta p,.meta ul{margin:0}
+.meta ul{padding-left:1.1em}
+.sw{display:flex;flex-wrap:wrap;gap:8px}
+.sw span{display:grid;gap:2px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sw i{display:block;width:40px;height:28px;border-radius:5px;border:1px solid var(--line)}
+
+/* ---------- shared mock parts ---------- */
+.bar{position:absolute;top:0;left:0;right:0;height:9cqw;display:flex;align-items:center;justify-content:space-between;padding:0 5cqw;z-index:3}
+.brand{font-size:2.6cqw;line-height:1}
+.who{width:4.4cqw;height:4.4cqw;border-radius:50%;display:grid;place-items:center;font-size:1.9cqw}
+.grid{position:absolute;inset:11cqw 5cqw 4.5cqw;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);row-gap:3.2cqw;z-index:2}
+.book{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.cover{position:relative}
+.cover.p{height:21.5cqw;aspect-ratio:3/4}
+.cover.l{width:24cqw;aspect-ratio:4/3}
+.art{position:absolute;inset:0;overflow:hidden;border-radius:inherit}
+.art svg{display:block;width:100%;height:100%}
+.ct{position:absolute;left:7%;right:7%;top:7%;text-align:center;font-size:2.1cqw;line-height:1.2;font-weight:700}
+.badge{position:absolute;white-space:nowrap;z-index:4}
+.cap{display:none}
+
+.stage{position:absolute;inset:0;display:grid;place-items:center}
+.spread{display:flex;height:55cqw;position:relative}
+.page{height:100%;aspect-ratio:3/4;position:relative;overflow:hidden;background:#EEF3F1}
+.page svg{display:block;width:100%;height:100%}
+.page.l::after{content:"";position:absolute;inset:0 0 0 auto;width:18%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.14))}
+.page.r::after{content:"";position:absolute;inset:0 auto 0 0;width:14%;background:linear-gradient(270deg,transparent,rgba(0,0,0,.12))}
+.page.r{clip-path:polygon(0 0,100% 0,100% calc(100% - 7cqw),calc(100% - 7cqw) 100%,0 100%)}
+.curl{position:absolute;right:0;bottom:0;width:7cqw;height:7cqw;background:linear-gradient(135deg,#FBF8F1 0%,#D8D0C0 50%,transparent 50%);z-index:2}
+.pg-text{position:absolute;top:6%;left:9%;right:9%;font-family:var(--serif);font-size:1.75cqw;line-height:1.55;color:#2F3B3A;z-index:1}
+.ctl{position:absolute;top:2.6cqw;width:5.2cqw;height:5.2cqw;border-radius:50%;display:grid;place-items:center;z-index:3}
+.ctl svg{width:2.4cqw;height:2.4cqw}
+.ctl.back{left:2.6cqw}
+.ctl.full{right:2.6cqw}
+.pageno{position:absolute;bottom:2.4cqw;left:50%;transform:translateX(-50%);font-size:1.7cqw;padding:.5cqw 1.8cqw;border-radius:3cqw;z-index:3;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- A 暖木书房 ---------- */
+.opt-a .shelf{background:repeating-linear-gradient(90deg,#F3E7D3 0 3cqw,#EFE1CA 3cqw 3.15cqw),#F3E7D3}
+.opt-a .brand{font-family:var(--serif);font-weight:700;color:#5A3E2B}
+.opt-a .who{background:#C8553D;color:#FBF3E4;font-family:var(--serif)}
+.opt-a .grid{column-gap:0}
+.opt-a .book::after{content:"";position:absolute;left:0;right:0;bottom:-1.7cqw;height:1.7cqw;background:linear-gradient(#C8925A,#A06F42);box-shadow:0 .9cqw 1.1cqw rgba(70,40,15,.3)}
+.opt-a .cover{box-shadow:.6cqw .2cqw 1cqw rgba(70,40,15,.35);border-radius:.3cqw .8cqw .8cqw .3cqw}
+.opt-a .art::before{content:"";position:absolute;inset:0 auto 0 0;width:6%;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent);z-index:1}
+.opt-a .badge{top:-1.5cqw;right:1.2cqw;background:#C8553D;color:#FBF3E4;font-family:var(--serif);font-size:1.25cqw;font-weight:700;padding:.35cqw .9cqw .45cqw;border-radius:.4cqw .4cqw 0 0}
+.opt-a .read{background:repeating-linear-gradient(90deg,rgba(0,0,0,.05) 0 .3cqw,transparent .3cqw 2.4cqw),linear-gradient(#B07A4B,#936139)}
+.opt-a .spread{box-shadow:.5cqw 0 0 #EFE6D6,1cqw 0 0 #DDD0B9,-.5cqw 0 0 #EFE6D6,-1cqw 0 0 #DDD0B9,0 2cqw 3cqw rgba(40,20,5,.45)}
+.opt-a .ctl{background:#F3E7D3;color:#5A3E2B;box-shadow:0 .4cqw .8cqw rgba(40,20,5,.3)}
+.opt-a .pageno{background:rgba(243,231,211,.92);color:#5A3E2B;font-family:var(--serif);font-weight:600}
+
+/* ---------- B 小剧场 ---------- */
+.opt-b .shelf{background:radial-gradient(ellipse 70% 60% at 50% -5%,rgba(255,214,140,.24),transparent 70%),linear-gradient(#141833,#1C2048)}
+.opt-b .shelf::before,.opt-b .shelf::after{content:"";position:absolute;top:0;bottom:0;width:4.2cqw;background:repeating-linear-gradient(90deg,#5E1621 0 .9cqw,#8A2633 .9cqw 2.1cqw);z-index:1}
+.opt-b .shelf::before{left:0;border-radius:0 0 2cqw 0}
+.opt-b .shelf::after{right:0;border-radius:0 0 0 2cqw}
+.opt-b .bar{padding:0 7cqw}
+.opt-b .grid{left:7cqw;right:7cqw}
+.opt-b .brand{font-family:var(--xiaowei);color:#F5D98B;font-size:2.9cqw}
+.opt-b .who{background:rgba(255,255,255,.12);color:#F5D98B}
+.opt-b .book::before{content:"";position:absolute;bottom:-2cqw;left:50%;transform:translateX(-50%);width:27cqw;height:4.5cqw;background:radial-gradient(ellipse at center,rgba(255,214,107,.34),transparent 70%)}
+.opt-b .cover{border-radius:.5cqw;box-shadow:0 0 2.4cqw rgba(255,214,140,.18)}
+.opt-b .badge{bottom:-1.3cqw;left:50%;transform:translateX(-50%);background:#2A2140;color:#FFD66B;border:.25cqw dotted #FFD66B;border-radius:3cqw;padding:.2cqw 1.1cqw;font-family:var(--huangyou);font-size:1.45cqw;box-shadow:0 0 1.4cqw rgba(255,214,107,.55);animation:glow 2.4s ease-in-out infinite}
+@keyframes glow{50%{box-shadow:0 0 2.4cqw rgba(255,214,107,.85)}}
+.opt-b .read{background:radial-gradient(ellipse 62% 72% at 50% 46%,#2B3062,#0E1024 76%)}
+.opt-b .spread{box-shadow:0 0 7cqw rgba(255,214,140,.22),0 2cqw 3cqw rgba(0,0,0,.5)}
+.opt-b .ctl{background:rgba(255,255,255,.1);color:#F5D98B}
+.opt-b .pageno{color:#F5D98B;font-family:var(--xiaowei);font-size:1.9cqw}
+
+/* ---------- C 蜡笔乐园 ---------- */
+.opt-c .shelf{background-color:#FFF4D6;background-image:radial-gradient(#FFC9C9 .38cqw,transparent .45cqw),radial-gradient(#BDE8E2 .38cqw,transparent .45cqw);background-size:6cqw 6cqw;background-position:0 0,3cqw 3cqw}
+.opt-c .brand{font-family:var(--kuaile);background:#FF6B6B;color:#fff;border:.4cqw solid #2D2A32;border-radius:3cqw;padding:.7cqw 1.8cqw}
+.opt-c .who{background:#7FD1C7;border:.4cqw solid #2D2A32;color:#2D2A32;font-family:var(--kuaile)}
+.opt-c .cover{border:.5cqw solid #2D2A32;border-radius:1.6cqw;box-shadow:.8cqw .8cqw 0 #2D2A32}
+.opt-c .book:nth-child(odd) .cover{rotate:-2.5deg}
+.opt-c .book:nth-child(even) .cover{rotate:2deg}
+.opt-c .badge{top:-2.4cqw;right:-2.4cqw;width:7.4cqw;height:7.4cqw;border-radius:50%;background:#FFD23F;border:.4cqw solid #2D2A32;color:#2D2A32;font-family:var(--kuaile);font-size:1.25cqw;line-height:1.1;display:grid;place-items:center;text-align:center;white-space:normal;rotate:14deg}
+.opt-c .read{background-color:#7FD1C7;background-image:radial-gradient(#A3E2DA .45cqw,transparent .5cqw);background-size:5cqw 5cqw}
+.opt-c .spread{border:.5cqw solid #2D2A32;border-radius:1.6cqw;overflow:hidden;box-shadow:.9cqw .9cqw 0 #2D2A32}
+.opt-c .ctl{background:#FFD23F;border:.4cqw solid #2D2A32;color:#2D2A32}
+.opt-c .pageno{background:#fff;border:.4cqw solid #2D2A32;color:#2D2A32;font-family:var(--kuaile);font-size:1.9cqw}
+
+/* ---------- D 安静画廊 ---------- */
+.opt-d .shelf{background:#F4F4F2}
+.opt-d .brand{font-weight:300;color:#3A3A38;letter-spacing:.12em;font-size:2.2cqw}
+.opt-d .who{background:#E3E3DF;color:#3A3A38;font-weight:300}
+.opt-d .grid{inset:11cqw 7cqw 3cqw}
+.opt-d .cover{box-shadow:0 1.2cqw 2.6cqw rgba(0,0,0,.12)}
+.opt-d .cover.p{height:20cqw}
+.opt-d .cover.l{width:22cqw}
+.opt-d .badge{display:none}
+.opt-d .cap{display:block;margin-top:1.3cqw;font-size:1.45cqw;color:#8A8A85;white-space:nowrap;line-height:1.2}
+.opt-d .cap .dr{color:#3E7C6B;margin-left:.8cqw}
+.opt-d .read{background:#EDEDEA}
+.opt-d .spread{box-shadow:0 1cqw 3cqw rgba(0,0,0,.1)}
+.opt-d .ctl{color:#8A8A85}
+.opt-d .pageno{color:#8A8A85;font-weight:300}
+
+/* ---------- comparison ---------- */
+section.cmp{border-top:1px solid var(--line);padding-block:36px;display:grid;gap:18px}
+section.cmp h2{font-size:24px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-weight:500;color:var(--muted);font-size:13px}
+td.dots{letter-spacing:.15em;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.dots s{color:var(--line);text-decoration:none}
+tr.rec td:first-child{font-weight:700}
+.rec-box{background:var(--accent-soft);border-radius:10px;padding:20px 22px;display:grid;gap:10px;max-width:78ch}
+.rec-box h3{font-size:18px}
+.rec-box p,.rec-box ul{margin:0}
+.rec-box ul{padding-left:1.2em}
+
+@media (max-width:760px){
+  .mocks{grid-template-columns:1fr}
+  .meta{grid-template-columns:1fr}
+  header.top h1{font-size:28px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">dance-page · 阅读端视觉</span>
+    <h1>四个风格方向</h1>
+    <p>每个方向用的是同一批示例绘本、同样的两个界面：书架和阅读页。这里只换视觉外壳。封面是占位插画，实际显示你上传的绘本。书架上有两本书标了 "Dance Ready!"，代表已经过 AI 处理，可以对比每种风格怎么展示这个状态。</p>
+    <p>书架和阅读页的风格可以分开选，比如用 A 的书架配 B 的阅读页。</p>
+  </header>
+
+  <nav class="jump" aria-label="方案">
+    <a href="#a"><b>A</b>暖木书房</a>
+    <a href="#b"><b>B</b>小剧场</a>
+    <a href="#c"><b>C</b>蜡笔乐园</a>
+    <a href="#d"><b>D</b>安静画廊</a>
+    <a href="#compare"><b>→</b>对比与推荐</a>
+  </nav>
+
+  <section class="opt opt-a" id="a">
+    <div class="opt-head">
+      <span class="letter">A</span><h2>暖木书房</h2>
+      <p class="tag">像家里的一面木书架：绘本立在木板上，阅读时摊在书桌上，两侧能看到书页的厚度。强化"翻一本真书"的感觉。</p>
+    </div>
+    <div class="mocks" data-mocks></div>
+    <div class="meta">
+      <div><h3>配色</h3><div class="sw">
+        <span><i style="background:#F3E7D3"></i>纸 #F3E7D3</span>
+        <span><i style="background:#B7834F"></i>橡木 #B7834F</span>
+        <span><i style="background:#8E6038"></i>深木 #8E6038</span>
+        <span><i style="background:#5A3E2B"></i>墨 #5A3E2B</span>
+        <span><i style="background:#C8553D"></i>书签红 #C8553D</span>
+      </div></div>
+      <div><h3>适合</h3><p>最直接地呼应仿真翻页，家长一看就懂，温暖安心。"Dance Ready!" 做成书签标签，像书里夹了一张小纸条。</p></div>
+      <div><h3>顾虑</h3><p>拟物元素多（木纹、纸张），细节做不好容易显得老旧；木色偏暖偏暗，和部分冷色调绘本不太搭。</p></div>
+    </div>
+  </section>
+
+  <section class="opt opt-b" id="b">
+    <div class="opt-head">
+      <span class="letter">B</span><h2>小剧场</h2><span class="pick">推荐</span>
+      <p class="tag">书架是一座深色的小舞台，两侧是幕布，每本书站在一束光里。打开绘本就像开演：周围暗下去，书页被聚光灯照亮。</p>
+    </div>
+    <div class="mocks" data-mocks></div>
+    <div class="meta">
+      <div><h3>配色</h3><div class="sw">
+        <span><i style="background:#141833"></i>夜幕 #141833</span>
+        <span><i style="background:#8A2633"></i>幕布 #8A2633</span>
+        <span><i style="background:#FFD66B"></i>聚光 #FFD66B</span>
+        <span><i style="background:#F5D98B"></i>舞台光 #F5D98B</span>
+        <span><i style="background:#2B3062"></i>台面 #2B3062</span>
+      </div></div>
+      <div><h3>适合</h3><p>和 dance-page、"Dance Ready!" 的名字天然契合，AI 阶段"页面动起来"就是演员登台。深色衬底让彩色插画更鲜艳；睡前在暗处读也不刺眼。"Dance Ready!" 是一块会发光的剧场招牌。</p></div>
+      <div><h3>顾虑</h3><p>白天在明亮环境下整体偏暗；深色界面上的文字和按钮对比度要处理好。</p></div>
+    </div>
+  </section>
+
+  <section class="opt opt-c" id="c">
+    <div class="opt-head">
+      <span class="letter">C</span><h2>蜡笔乐园</h2>
+      <p class="tag">明亮的糖果色、粗黑描边、歪歪扭扭的贴纸感，像孩子的涂鸦本。最"儿童"的一个方向。</p>
+    </div>
+    <div class="mocks" data-mocks></div>
+    <div class="meta">
+      <div><h3>配色</h3><div class="sw">
+        <span><i style="background:#FFF4D6"></i>奶黄 #FFF4D6</span>
+        <span><i style="background:#FF6B6B"></i>西瓜红 #FF6B6B</span>
+        <span><i style="background:#FFD23F"></i>柠檬 #FFD23F</span>
+        <span><i style="background:#7FD1C7"></i>薄荷 #7FD1C7</span>
+        <span><i style="background:#2D2A32"></i>描边 #2D2A32</span>
+      </div></div>
+      <div><h3>适合</h3><p>2–4 岁的低龄孩子会觉得最亲切，按钮大而醒目，好点。"Dance Ready!" 是一张歪贴的圆形贴纸。</p></div>
+      <div><h3>顾虑</h3><p>界面本身颜色多、存在感强，会和绘本插画抢注意力，和"不抢绘本的戏"的原则冲突最大。</p></div>
+    </div>
+  </section>
+
+  <section class="opt opt-d" id="d">
+    <div class="opt-head">
+      <span class="letter">D</span><h2>安静画廊</h2>
+      <p class="tag">大面积留白、浅灰背景、极细的文字，封面像美术馆墙上的展品。界面几乎隐形。</p>
+    </div>
+    <div class="mocks" data-mocks></div>
+    <div class="meta">
+      <div><h3>配色</h3><div class="sw">
+        <span><i style="background:#F4F4F2"></i>画廊白 #F4F4F2</span>
+        <span><i style="background:#E3E3DF"></i>石灰 #E3E3DF</span>
+        <span><i style="background:#3A3A38"></i>炭灰 #3A3A38</span>
+        <span><i style="background:#8A8A85"></i>中灰 #8A8A85</span>
+        <span><i style="background:#3E7C6B"></i>青绿 #3E7C6B</span>
+      </div></div>
+      <div><h3>适合</h3><p>绘本画面是绝对的主角，任何风格的绘本都搭；开发最快。"Dance Ready!" 只是书名旁的一行小字。</p></div>
+      <div><h3>顾虑</h3><p>缺少温度和童趣，更像成人的阅读工具；孩子不太会对书架本身产生兴趣。</p></div>
+    </div>
+  </section>
+
+  <section class="cmp" id="compare">
+    <h2>对比与推荐</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>方向</th><th>童趣感</th><th>不抢绘本的戏</th><th>契合 dance-page</th><th>睡前阅读</th><th>实现成本</th></tr></thead>
+        <tbody>
+          <tr><td>A 暖木书房</td><td class="dots">●●●<s>●●</s></td><td class="dots">●●●<s>●●</s></td><td class="dots">●●<s>●●●</s></td><td class="dots">●●●<s>●●</s></td><td>较高（材质细节多）</td></tr>
+          <tr class="rec"><td>B 小剧场</td><td class="dots">●●●<s>●●</s></td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●●</td><td class="dots">●●●●●</td><td>中</td></tr>
+          <tr><td>C 蜡笔乐园</td><td class="dots">●●●●●</td><td class="dots">●●<s>●●●</s></td><td class="dots">●●●<s>●●</s></td><td class="dots">●●<s>●●●</s></td><td>中</td></tr>
+          <tr><td>D 安静画廊</td><td class="dots">●<s>●●●●</s></td><td class="dots">●●●●●</td><td class="dots">●<s>●●●●</s></td><td class="dots">●●●<s>●●</s></td><td>低</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="rec-box">
+      <h3>推荐 B 小剧场</h3>
+      <ul>
+        <li><b>有故事可讲</b>：dance-page 和 "Dance Ready!" 本身就是舞台的比喻。到了 AI 阶段，书页开口朗读、画面动起来，正好是"演出开始"。</li>
+        <li><b>让画面更好看</b>：深色衬底像影院模式，彩色插画显得更鲜艳，界面自然退到后面。</li>
+        <li><b>贴合使用时间</b>：孩子多在睡前看绘本，暗色环境不刺眼。</li>
+      </ul>
+      <p>如果担心白天偏暗，可以折中：<b>书架用 A 暖木书房，阅读页用 B 小剧场</b>。在书架上挑书时温暖明亮，打开书后灯光暗下来。</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const INK = '#2B1D14';
+const bearFig = (tx, ty, s, rot) => `<g transform="translate(${tx} ${ty}) scale(${s}) rotate(${rot||0} 150 280)">
+  <line x1="172" y1="178" x2="172" y2="290" stroke="#5B3A29" stroke-width="5"/>
+  <ellipse cx="150" cy="300" rx="60" ry="58" fill="#8B5E3C"/>
+  <circle cx="114" cy="206" r="15" fill="#8B5E3C"/><circle cx="186" cy="206" r="15" fill="#8B5E3C"/>
+  <circle cx="150" cy="240" r="45" fill="#8B5E3C"/>
+  <ellipse cx="150" cy="255" rx="18" ry="13" fill="#D9B38C"/>
+  <ellipse cx="150" cy="249" rx="6" ry="4" fill="${INK}"/>
+  <circle cx="134" cy="233" r="4" fill="${INK}"/><circle cx="166" cy="233" r="4" fill="${INK}"/>
+  <circle cx="178" cy="290" r="12" fill="#7A5033"/>
+  <ellipse cx="124" cy="356" rx="20" ry="10" fill="#F2C14E"/><ellipse cx="176" cy="356" rx="20" ry="10" fill="#F2C14E"/>
+  <path d="M82 180 Q172 92 262 180 Z" fill="#E4572E"/>
+  <path d="M82 180 q15 -9 30 0 q15 -9 30 0 q15 -9 30 0 q15 -9 30 0 q15 -9 30 0 q15 -9 30 0" fill="none" stroke="#C4431F" stroke-width="3"/>
+</g>`;
+const rain = (n, w, h, seed) => {
+  let s = seed, out = '';
+  for (let i = 0; i < n; i++) {
+    s = (s * 9301 + 49297) % 233280; const x = (s / 233280) * w;
+    s = (s * 9301 + 49297) % 233280; const y = (s / 233280) * h;
+    out += `<path d="M${x.toFixed(0)} ${y.toFixed(0)} l-6 16"/>`;
+  }
+  return `<g stroke="#fff" stroke-opacity=".6" stroke-width="3" stroke-linecap="round">${out}</g>`;
+};
+const stars = (pts) => pts.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#F7E7A6"/>`).join('');
+
+const ART = {
+  bear: `<rect width="300" height="400" fill="#A9C1CC"/><rect y="310" width="300" height="90" fill="#93AEBA"/>
+    <ellipse cx="150" cy="362" rx="120" ry="20" fill="#7593A1"/>${rain(26, 300, 300, 7)}${bearFig(0, 0, 1)}`,
+  cloud: `<rect width="300" height="400" fill="#CFEAF6"/><circle cx="244" cy="118" r="24" fill="#FFE08A"/>
+    <g fill="#fff"><circle cx="118" cy="215" r="38"/><circle cx="162" cy="198" r="48"/><circle cx="206" cy="218" r="34"/><rect x="84" y="214" width="156" height="38" rx="19"/></g>
+    <circle cx="146" cy="220" r="4" fill="#35536B"/><circle cx="180" cy="220" r="4" fill="#35536B"/>
+    <path d="M153 232 q10 8 20 0" stroke="#35536B" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="80" cy="410" rx="180" ry="92" fill="#9BCB8C"/><ellipse cx="250" cy="418" rx="170" ry="84" fill="#7DB871"/>
+    <rect x="205" y="318" width="40" height="30" fill="#F4F1E8"/><path d="M199 320 L225 297 L251 320Z" fill="#D9694A"/><rect x="220" y="330" width="10" height="18" fill="#8B5E3C"/>`,
+  sea: `<rect width="400" height="300" fill="#FFD9A8"/><circle cx="310" cy="112" r="32" fill="#FF8A5B"/>
+    <rect y="150" width="400" height="84" fill="#3F8FB5"/>
+    <path d="M0 168 q25 -12 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0" stroke="#A9D6EA" stroke-width="4" fill="none"/>
+    <path d="M0 198 q25 -12 50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0 t50 0" stroke="#7FBBD6" stroke-width="4" fill="none"/>
+    <path d="M0 232 Q200 208 400 232 V300 H0Z" fill="#F2D6A2"/>
+    <path d="M86 250 h24 l-4 24 h-16z" fill="#E4572E"/><path d="M90 250 q8 -14 16 0" stroke="#E4572E" stroke-width="3" fill="none"/>
+    <path d="M290 262 l5 10 11 1 -8 7 3 11 -11 -6 -10 6 3 -11 -8 -7 11 -1z" fill="#E88A5B"/>`,
+  moon: `<rect width="300" height="400" fill="#26305C"/>${stars([[40,120,2.5],[90,70,2],[250,60,3],[60,210,2],[270,190,2.5],[220,250,2],[30,280,2]])}
+    <circle cx="160" cy="175" r="58" fill="#F7E7A6"/><circle cx="186" cy="160" r="52" fill="#26305C"/>
+    <path d="M0 330 L40 300 L80 330 V400 H0Z M70 340 L120 296 L170 340 V400 H70Z M160 322 L210 286 L260 322 V400 H160Z M250 346 L280 322 L300 336 V400 H250Z" fill="#1A2145"/>
+    <rect x="104" y="352" width="12" height="14" fill="#F7E7A6"/><rect x="200" y="336" width="12" height="14" fill="#F7E7A6"/><rect x="30" y="344" width="10" height="12" fill="#F7E7A6" opacity=".7"/>`,
+  fox: `<rect width="400" height="300" fill="#1F4E5A"/>${stars([[40,110,2],[90,150,2.5],[150,100,2],[200,140,3],[330,110,2],[370,160,2],[120,190,1.8]])}
+    <path d="M0 232 Q140 172 260 215 T400 205 V300 H0Z" fill="#2E6B63"/>
+    <path d="M262 212 Q298 206 292 176 Q282 198 262 204Z" fill="#E8833A"/><path d="M292 176 q-2 8 -6 12 q6 -2 6 -12z" fill="#fff"/>
+    <path d="M236 216 L266 216 L251 172Z" fill="#E8833A"/>
+    <path d="M239 174 L263 174 L251 192Z" fill="#E8833A"/><path d="M239 174 L243 160 L249 174Z M253 174 L259 160 L263 174Z" fill="#E8833A"/>
+    <circle cx="247" cy="179" r="1.8" fill="${INK}"/><circle cx="255" cy="179" r="1.8" fill="${INK}"/>`,
+  seed: `<rect width="300" height="400" fill="#F6EBD3"/><circle cx="236" cy="120" r="28" fill="#F2B84B"/>
+    <path d="M0 302 Q150 272 300 302 V400 H0Z" fill="#8A5A3B"/>
+    <path d="M150 292 C150 256 145 236 150 206" stroke="#5E9C4A" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M150 238 C120 233 105 213 110 198 C130 200 148 218 150 238Z" fill="#6DB35A"/>
+    <path d="M150 222 C175 212 195 192 192 177 C172 179 155 197 150 222Z" fill="#5E9C4A"/>
+    <ellipse cx="150" cy="330" rx="11" ry="7" fill="#5B3A24"/>`
+};
+
+const BOOKS = [
+  { id: 'bear',  o: 'p', t: '小熊的雨天', f: 'var(--kuaile)', c: '#2E4A57', ready: true },
+  { id: 'cloud', o: 'p', t: 'Little Cloud Goes Home', f: 'var(--serif)', c: '#35536B' },
+  { id: 'sea',   o: 'l', t: '去海边', f: 'var(--kuaile)', c: '#7A3B1E', ready: true },
+  { id: 'moon',  o: 'p', t: '月亮不睡觉', f: 'var(--serif)', c: '#F7E7A6' },
+  { id: 'fox',   o: 'l', t: 'The Fox Who Counted Stars', f: 'var(--serif)', c: '#F2E3C6' },
+  { id: 'seed',  o: 'p', t: '种一颗种子', f: 'var(--kuaile)', c: '#5B3A24' }
+];
+
+const coverHTML = b => {
+  const vb = b.o === 'p' ? '0 0 300 400' : '0 0 400 300';
+  return `<div class="book">
+    <div class="cover ${b.o}">
+      <div class="art"><svg viewBox="${vb}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[b.id]}</svg>
+      <span class="ct" style="font-family:${b.f};color:${b.c}">${b.t}</span></div>
+      ${b.ready ? '<span class="badge">Dance Ready!</span>' : ''}
+    </div>
+    <div class="cap">${b.t}${b.ready ? '<span class="dr">● Dance Ready</span>' : ''}</div>
+  </div>`;
+};
+
+const pageL = `<svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <rect width="300" height="400" fill="#EAF1EF"/><rect y="320" width="300" height="80" fill="#C9D8CF"/>${rain(22, 300, 320, 3)}
+  ${bearFig(40, 90, .72)}</svg>`;
+const pageR = `<svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <rect width="300" height="400" fill="#EAF1EF"/><rect y="320" width="300" height="80" fill="#C9D8CF"/>${rain(18, 300, 320, 11)}
+  <ellipse cx="150" cy="352" rx="120" ry="22" fill="#8FAAB6"/>
+  <g fill="#8FAAB6"><circle cx="52" cy="318" r="7"/><circle cx="36" cy="296" r="5"/><circle cx="250" cy="314" r="7"/><circle cx="268" cy="292" r="5"/><circle cx="80" cy="300" r="4"/><circle cx="224" cy="296" r="4"/></g>
+  ${bearFig(40, 40, .72, -8)}</svg>`;
+
+const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+const ICON_FULL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+
+const shelfHTML = `<div class="screen shelf" role="img" aria-label="书架示意">
+  <div class="bar"><span class="brand">dance-page</span><span class="who">满</span></div>
+  <div class="grid">${BOOKS.map(coverHTML).join('')}</div>
+</div>`;
+const readHTML = `<div class="screen read" role="img" aria-label="阅读页示意">
+  <div class="stage"><div class="spread">
+    <div class="page l">${pageL}<p class="pg-text">下雨了，小熊撑起红色的小伞，<br>一步一步走出家门。</p></div>
+    <div class="page r">${pageR}<p class="pg-text">啪嗒！<br>小熊跳进了一个大水坑。</p><span class="curl"></span></div>
+  </div></div>
+  <span class="ctl back">${ICON_BACK}</span><span class="ctl full">${ICON_FULL}</span>
+  <span class="pageno">3 / 24</span>
+</div>`;
+
+document.querySelectorAll('[data-mocks]').forEach(el => {
+  el.innerHTML = `<figure><div class="mw"><div class="device">${shelfHTML}</div></div><figcaption>书架 · 平板横屏</figcaption></figure>
+  <figure><div class="mw"><div class="device">${readHTML}</div></div><figcaption>阅读页 · 竖版书横屏对开，右下角是翻页卷角</figcaption></figure>`;
+});
+</script>
