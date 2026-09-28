@@ -7,8 +7,10 @@ import type { ShelfBook } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { isBookOpening, startBookOpening } from "@/pages/stage/book-opening";
 import { DoodleHeart } from "@/pages/stage/doodle-heart";
+import { DoodleNote } from "@/pages/stage/doodle-note";
 import { coverRectInReader } from "@/pages/stage/reader-layout";
 import type { ShelfTheme } from "@/pages/stage/shelf-themes";
+import { unlockStoryAudio } from "@/pages/stage/story-audio";
 import {
   ENTRANCE_STAGGER_MS,
   PRESS_BOUNCE_MS,
@@ -39,6 +41,8 @@ export function ShelfItem({
 
   // 点书：回弹 + 光点，然后封面飞到阅读页上封面的位置，再进入阅读页（D52）
   const onOpen = (e: React.MouseEvent) => {
+    // 借这次点击解锁声音，进入阅读页后自动朗读才能直接播放（iPad Safari 的限制）
+    if (book.voice_ready) unlockStoryAudio();
     const image = imageRef.current;
     // 按住修饰键时保留浏览器默认行为（如新标签页打开）
     if (!motionEnabled || !image || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -121,6 +125,12 @@ export function ShelfItem({
           theme.caption,
         )}
       >
+        {book.voice_ready && (
+          <>
+            <DoodleNote className="mr-1 inline-block size-[1.15em] -translate-y-[0.12em] align-middle" />
+            <span className="sr-only">（有朗读）</span>
+          </>
+        )}
         {book.title}
       </p>
     </div>

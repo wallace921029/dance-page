@@ -72,7 +72,8 @@ cleanup() {
   kill "${pids[@]}" 2>/dev/null || true
   wait 2>/dev/null || true
 }
-trap cleanup INT TERM EXIT
+trap 'cleanup; exit 130' INT TERM
+trap cleanup EXIT
 
 # 给每行输出加上来源标记，方便区分前后端日志
 prefix() { while IFS= read -r line; do printf '%s %s\n' "$1" "$line"; done; }
@@ -113,5 +114,11 @@ if $LAN; then
   echo
 fi
 
-# 任意一个进程退出（如启动失败），就停止另一个
-wait -n "${pids[@]}"
+# 任意一个进程退出（如启动失败），就停止其他进程。
+# 不用 `wait -n`：macOS 自带的 bash 3.2 不支持，而且进程在执行到 wait 之前就退出时它也察觉不到
+while :; do
+  for pid in "${pids[@]}"; do
+    kill -0 "$pid" 2>/dev/null || exit 1
+  done
+  sleep 1
+done

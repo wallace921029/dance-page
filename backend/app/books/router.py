@@ -9,11 +9,11 @@ from sqlalchemy.orm import Session, aliased, selectinload
 from app.books import storage
 from app.books.schemas import ReaderBookOut, ShelfBookOut
 from app.deps import AppSettings, CurrentUser, DbSession
-from app.models import Book, Favorite, Page, User
+from app.models import AiUnit, Book, Favorite, Page, User
 
 router = APIRouter(prefix="/books", tags=["阅读端"])
 
-# 图片地址带版本参数（?v=），内容变化时地址随之变化，所以可以长期缓存
+# 图片、朗读地址带版本参数（?v=），内容变化时地址随之变化，所以可以长期缓存
 IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 
@@ -23,7 +23,7 @@ def _readable_book(db: Session, book_id: str, user: User, *, with_pages: bool = 
     if user.role != "admin":
         query = query.where(Book.visibility == "listed")
     if with_pages:
-        query = query.options(selectinload(Book.pages))
+        query = query.options(selectinload(Book.pages), selectinload(Book.ai_units))
     book = db.scalar(query)
     if book is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "绘本不存在")
@@ -97,3 +97,26 @@ def get_page(book_id: str, index: int, user: CurrentUser, db: DbSession, setting
     if not 0 <= index < book.page_count:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "页面不存在")
     return _image_response(storage.page_path(settings, book_id, index))
+
+
+@router.get("/{book_id}/ai/audio/{unit_id}", response_class=FileResponse)
+def get_unit_audio(
+    book_id: str, unit_id: str, user: CurrentUser, db: DbSession, settings: AppSettings
+):
+    """已确认 Voice Ready 的绘本的单元朗读（docs/06 第 7 节）。"""
+    book = _readable_book(db, book_id, user)
+    unit = db.get(AiUnit, unit_id)
+    if (
+        book.voice_ready_at is None
+        or unit is None
+        or unit.book_id != book.id
+        or unit.audio_source_hash is None
+        or not unit.audio_enabled
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "朗读不存在")
+    path = storage.ai_audio_path(settings, book_id, unit_id)
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "朗读不存在")
+    return FileResponse(
+        path, media_type="audio/mp4", headers={"Cache-Control": IMAGE_CACHE_CONTROL}
+    )

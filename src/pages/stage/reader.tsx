@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ArrowLeft, BookOpen, Maximize, Minimize } from "lucide-react";
 import { useReaderBook } from "@/api/shelf";
+import type { ReaderUnit } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
@@ -12,6 +13,10 @@ import { getErrorMessage } from "@/lib/api";
 import { READER_BACKGROUND, StageRoundButton, stageSubmitButtonClass } from "@/pages/stage/common";
 import { finishBookOpening } from "@/pages/stage/book-opening";
 import { FlipBook, type FlipBookHandle } from "@/pages/stage/flip-book";
+import { AutoReadToggle, ReadAloudSpeakers } from "@/pages/stage/read-aloud";
+import { useReadAloud } from "@/pages/stage/use-read-aloud";
+
+const NO_UNITS: ReaderUnit[] = [];
 
 /** 从书架"翻开进入阅读"时，过渡层撤掉后等这么久再自动翻开封面 */
 const AUTO_OPEN_DELAY_MS = 300;
@@ -31,7 +36,19 @@ export default function ReaderPage() {
   const { data: book, isPending, error } = useReaderBook(id);
   const flipRef = useRef<FlipBookHandle>(null);
   const [visible, setVisible] = useState<number[]>([0]);
+  // 各位置上的页码（单页 1 项，对开 [左, 右]）；排版前为 null
+  const [slots, setSlots] = useState<(number | null)[] | null>(null);
+  const [flipping, setFlipping] = useState(false);
   const [closing, setClosing] = useState(false);
+  const units = book?.units ?? NO_UNITS;
+  const hasAudio = units.some((u) => u.audio_url);
+  const readAloud = useReadAloud({
+    units,
+    readOrder: book?.read_order ?? "left_first",
+    slots,
+    flipping,
+    skipFirstAutoRead: opening,
+  });
 
   useDocumentTitle(book?.title);
 
@@ -58,8 +75,9 @@ export default function ReaderPage() {
     navigate(location.pathname, { replace: true, state: { shelfPath } });
   };
 
-  const onVisibleChange = (pages: number[]) => {
+  const onVisibleChange = (pages: number[], pageSlots: (number | null)[]) => {
     setVisible(pages);
+    setSlots(pageSlots);
     if (pages.includes(0)) setClosing(false);
   };
 
@@ -79,7 +97,20 @@ export default function ReaderPage() {
           spreadStartPage={book.spread_start_page}
           background={READER_BACKGROUND}
           onVisibleChange={onVisibleChange}
+          onFlippingChange={setFlipping}
           onReady={onReady}
+          overlay={
+            hasAudio
+              ? (layout) => (
+                  <ReadAloudSpeakers
+                    layout={layout}
+                    units={units}
+                    slots={slots}
+                    flipping={flipping}
+                  />
+                )
+              : undefined
+          }
         />
       )}
 
@@ -88,7 +119,8 @@ export default function ReaderPage() {
           <ArrowLeft />
         </StageRoundButton>
       </div>
-      <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-10">
+      <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-10 flex items-center gap-2">
+        {hasAudio && <AutoReadToggle on={readAloud.autoRead} onToggle={readAloud.toggleAutoRead} />}
         <FullscreenButton />
       </div>
 

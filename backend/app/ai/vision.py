@@ -12,8 +12,25 @@ from app.ai.providers import ProviderError
 from app.ai.providers.common import describe_error
 from app.ai.settings import CapabilityConfig
 
-VISION_ANALYSIS_TIMEOUT = 180.0
+# 台词适度扩充后（D93）整本分析的输出明显变长：一本 36 页的书约需 1 万 token
+VISION_ANALYSIS_TIMEOUT = 300.0
 VISION_DRAFT_TIMEOUT = 60.0
+ANALYSIS_MAX_TOKENS = 16384
+DRAFT_MAX_TOKENS = 8192
+
+
+def script_rules(language: str | None) -> str:
+    """朗读稿的写法（D93）：原文逐字保留，结合画面适度扩充。整本分析和单元重写共用。"""
+    lang_desc = "英文" if language == "en" else "中文"
+    return f"""lines 是这一页的朗读稿，按朗读顺序排列，每行标注说话人：
+   - 画面上印的故事文字要完整保留、逐字不改，按原文分行；
+   - 在此基础上结合画面补充 2–3 句简短的内容（每句不超过 20 字，英文不超过 12 个词），
+     这些行加 "added": true：可以是旁白对画面、动作、心情的描写，拟声词，
+     或角色贴合情节的简短对白和语气词；
+     补充的行插在原文前后合适的位置，不要重复原文，不要编造与画面和故事不符的情节；
+   - 画面上没有故事文字的页面，写 1–2 句简短旁白（"added": true）；
+   - 封面只读书名，不补充；版权页、空白页等不讲故事的页面 lines 为 []；
+   - 补充内容与原文同一语言（{lang_desc}），用词适合 3–6 岁孩子听。"""
 
 
 def encode_page_image(path: Path, long_edge: int = 800, quality: int = 75) -> str:
@@ -85,7 +102,8 @@ def build_analysis_prompt(
     {{
       "page_index": 0,
       "lines": [
-        {{"character": "角色名", "text": "原文台词"}}
+        {{"character": "角色名", "text": "原文"}},
+        {{"character": "角色名", "text": "补充的一句", "added": true}}
       ],
       "motion_prompt": "适合该页的5秒微动作循环描述（画面中主角轻柔微动作，最后回到初始姿态）"
     }}
@@ -101,7 +119,7 @@ def build_analysis_prompt(
 注意要求：
 1. 必须包含一个 is_narrator: true 的旁白角色。
 2. pages 必须包含从 0 到 {total_pages - 1} 的所有页面。
-   如果画面无文字，lines 为 []。文字必须与画面完全一致，保持原文语言。
+   {script_rules(language)}
 3. spread_suggestions 必须覆盖以下开页：{spreads_str or "无"}。
    如果左右两页是同一个完整大场景（左右画面连贯是一张图），is_same_scene 为 true，否则为 false。
 4. 只输出合法的 JSON 对象，不要添加任何 markdown 代码块标记或额外说明。"""
@@ -111,7 +129,7 @@ def _build_chat_payload(
     model: str,
     content: list[dict[str, Any]],
     provider: str,
-    max_tokens: int = 8192,
+    max_tokens: int,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": model,
@@ -119,7 +137,7 @@ def _build_chat_payload(
         "temperature": 0.2,
         "max_tokens": max_tokens,
     }
-    # 针对百炼与火山方舟新一代多模态模型，显式关闭思考模式，避免消耗大量 reasoning tokens 导致截断和超时
+    # 新一代多模态模型显式关闭思考模式，避免消耗大量 reasoning tokens 导致截断和超时
     if provider == "dashscope":
         payload["enable_thinking"] = False
     elif provider == "volcengine":
@@ -133,10 +151,11 @@ def _execute_vision_completion(
     api_key: str,
     content: list[dict[str, Any]],
     timeout: float,
+    max_tokens: int,
 ) -> dict[str, Any]:
     url = f"{config.base_url.rstrip('/')}/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = _build_chat_payload(config.model, content, config.provider)
+    payload = _build_chat_payload(config.model, content, config.provider, max_tokens)
 
     res = client.post(url, headers=headers, json=payload, timeout=timeout)
     # 如果服务商返回 400 且请求中携带了思考参数，自动剔除思考参数后重试一次
@@ -155,7 +174,8 @@ def _execute_vision_completion(
         finish_reason = choice.get("finish_reason")
         if finish_reason == "length":
             raise ProviderError(
-                "大模型输出达到 Token 上限（finish_reason=length），内容被截断。请增大 max_tokens 或减少单次分析页数。"
+                "大模型输出达到 Token 上限（finish_reason=length），内容被截断。"
+                "请增大 max_tokens 或减少单次分析页数。"
             )
         raw_text = choice["message"]["content"]
     except KeyError as e:
@@ -184,7 +204,12 @@ def analyze_book_story(
 
     with providers.http_client() as client:
         result = _execute_vision_completion(
-            client, config, api_key, content, timeout=VISION_ANALYSIS_TIMEOUT
+            client,
+            config,
+            api_key,
+            content,
+            timeout=VISION_ANALYSIS_TIMEOUT,
+            max_tokens=ANALYSIS_MAX_TOKENS,
         )
 
     if "story" not in result or "characters" not in result or "pages" not in result:
@@ -212,15 +237,19 @@ def draft_unit_content(
 已有角色列表：{char_list_str}
 绘本语言：{lang_desc}
 
-请仔细观察附带的画面（{pages_str}），识别画面中的文字台词，并给出画面微动作循环描述。
+请仔细观察附带的画面（{pages_str}），写出朗读稿，并给出画面微动作循环描述。
 按以下严格 JSON 格式返回：
 {{
   "lines": [
-    {{"character": "角色名（必须从已有角色列表中选择，无法确定填'旁白'）", "text": "原文台词"}}
+    {{"character": "角色名（必须从已有角色列表中选择，无法确定填'旁白'）", "text": "原文"}},
+    {{"character": "角色名", "text": "补充的一句", "added": true}}
   ],
   "motion_prompt": "适合该画面的5秒微动作循环描述（画面中主角轻柔微动作，最后回到初始姿态）"
 }}
-如果画面没有文字，lines 请返回 []。只返回合法的 JSON 对象。"""
+要求：
+1. 多页时把各页的朗读稿按页码顺序连在一起。
+2. {script_rules(language)}
+3. 只返回合法的 JSON 对象。"""
 
     content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
     for idx, path in zip(page_indexes, page_paths, strict=False):
@@ -230,7 +259,12 @@ def draft_unit_content(
 
     with providers.http_client() as client:
         result = _execute_vision_completion(
-            client, config, api_key, content, timeout=VISION_DRAFT_TIMEOUT
+            client,
+            config,
+            api_key,
+            content,
+            timeout=VISION_DRAFT_TIMEOUT,
+            max_tokens=DRAFT_MAX_TOKENS,
         )
 
     if "lines" not in result:

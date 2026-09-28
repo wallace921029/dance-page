@@ -303,3 +303,74 @@ def test_parse_json_from_llm():
     text4 = '{"story": "line 1\nline 2\ttab"}'
     assert parse_json_from_llm(text4) == {"story": "line 1\nline 2\ttab"}
 
+
+def test_expanded_script_lines(
+    admin: TestClient, app, worker, ready_book: dict, fake_vision_provider
+):
+    """朗读稿保留原文并适度扩充（D93）：补充的行带 added 标记，编辑后不丢。"""
+    book_id = ready_book["id"]
+    app.state.settings.dashscope_api_key = "sk-mock-key"
+    requests = fake_vision_provider(
+        {
+            "story": "小故事",
+            "characters": [
+                {"name": "旁白", "is_narrator": True, "voice_prompt": "温和"},
+                {"name": "皮普", "is_narrator": False, "voice_prompt": "小男孩"},
+            ],
+            "pages": [
+                {
+                    "page_index": 2,
+                    "lines": [
+                        {"character": "旁白", "text": "咚、咚、咚……有人在敲门。", "added": True},
+                        {"character": "旁白", "text": "门开了，是一只大怪兽！"},
+                        {"character": "皮普", "text": "哇呀呀呀！", "added": True},
+                    ],
+                },
+                # 没有故事文字的页面也配一句旁白
+                {
+                    "page_index": 3,
+                    "lines": [{"character": "旁白", "text": "屋里静悄悄的。", "added": True}],
+                },
+            ],
+            "spread_suggestions": [],
+        }
+    )
+    admin.post(f"/api/admin/books/{book_id}/ai/analyze")
+    assert worker.run_once() is True
+
+    body = json.loads(requests[0].content)
+    assert body["max_tokens"] == 16384
+    prompt = body["messages"][0]["content"][0]["text"]
+    assert "逐字不改" in prompt and "2–3 句" in prompt
+
+    spreads = admin.get(f"/api/admin/books/{book_id}/ai").json()["spreads"]
+    units = {u["first_page_index"]: u for s in spreads for u in s["units"]}
+    assert [(line["text"], line["added"]) for line in units[2]["lines"]] == [
+        ("咚、咚、咚……有人在敲门。", True),
+        ("门开了，是一只大怪兽！", False),
+        ("哇呀呀呀！", True),
+    ]
+    assert units[3]["lines"][0]["added"] is True
+
+    # 管理员编辑后，补充标记保留；旧数据没有该字段时按原文处理
+    res = admin.patch(
+        f"/api/admin/ai/units/{units[2]['id']}",
+        json={
+            "lines": [{"character_id": None, "text": "咚咚咚", "added": True}, {"text": "门开了"}]
+        },
+    )
+    assert [line["added"] for line in res.json()["lines"]] == [True, False]
+
+    # 单元重写草稿用同样的规则
+    requests = fake_vision_provider(
+        {"lines": [{"character": "皮普", "text": "嘿嘿！", "added": True}], "motion_prompt": None}
+    )
+    admin.post(f"/api/admin/ai/units/{units[2]['id']}/draft")
+    assert worker.run_once() is True
+    draft_prompt = json.loads(requests[0].content)["messages"][0]["content"][0]["text"]
+    assert "逐字不改" in draft_prompt
+    spreads = admin.get(f"/api/admin/books/{book_id}/ai").json()["spreads"]
+    redrafted = next(u for s in spreads for u in s["units"] if u["id"] == units[2]["id"])
+    assert redrafted["lines"] == [
+        {"character_id": redrafted["lines"][0]["character_id"], "text": "嘿嘿！", "added": True}
+    ]

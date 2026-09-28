@@ -51,3 +51,6 @@ def delete_ai_unit_files(settings: Settings, book_id: str, unit_id: str) -> None
     ai_audio_path(settings, book_id, unit_id).unlink(missing_ok=True)
     ai_video_path(settings, book_id, unit_id).unlink(missing_ok=True)
 
+
+def delete_ai_voice_files(settings: Settings, book_id: str) -> None:
+    shutil.rmtree(ai_dir(settings, book_id) / "voices", ignore_errors=True)

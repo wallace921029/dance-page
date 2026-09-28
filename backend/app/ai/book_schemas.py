@@ -7,11 +7,23 @@ from pydantic import BaseModel, field_validator
 class LineItem(BaseModel):
     character_id: int | None = None
     text: str
+    # 大模型在原文之外补充的内容（D93）；原文行为 False
+    added: bool = False
 
     @field_validator("text")
     @classmethod
     def _text(cls, v: str) -> str:
         return v.strip()
+
+
+class CharacterVoiceOut(BaseModel):
+    id: int
+    provider: str
+    tts_model: str
+    voice_prompt_used: str | None
+    created_at: datetime
+    # 试听音频（WAV），仅后台使用
+    preview_url: str
 
 
 class CharacterOut(BaseModel):
@@ -21,6 +33,12 @@ class CharacterOut(BaseModel):
     is_narrator: bool
     voice_prompt: str | None
     sort_order: int
+    # 当前朗读设置（服务商 + 合成模型）下的音色；没有时为 None（D78）
+    voice: CharacterVoiceOut | None
+    voice_status: Literal["none", "queued", "running", "ready", "failed"]
+    voice_error: str | None
+    # 音色描述在生成音色之后又改过，需要重新生成
+    voice_outdated: bool
 
 
 class CharacterCreate(BaseModel):
@@ -60,6 +78,8 @@ class AiUnitOut(BaseModel):
     page_count: int
     lines: list[LineItem]
     motion_prompt: str | None
+    audio_enabled: bool
+    video_enabled: bool
     audio_status: str
     video_status: str
     audio_error: str | None
@@ -73,6 +93,10 @@ class AiUnitOut(BaseModel):
     video_version: int
     created_at: datetime
     updated_at: datetime
+    # 已生成的朗读（后台试听）；重新生成期间仍可听旧的
+    audio_url: str | None
+    # 台词或音色在生成朗读之后改过，需要重新生成
+    audio_outdated: bool
 
 
 class SpreadOut(BaseModel):
@@ -80,6 +104,9 @@ class SpreadOut(BaseModel):
     left_page_index: int | None
     right_page_index: int | None
     mode: Literal["single", "separate", "merged"]
+    # 开页的"朗读""动画"开关（D95）；没有单元时为 True
+    audio_enabled: bool
+    video_enabled: bool
     units: list[AiUnitOut]
 
 
@@ -117,9 +144,19 @@ class SpreadModeUpdate(BaseModel):
     mode: Literal["separate", "merged"]
 
 
+class SpreadSwitchesUpdate(BaseModel):
+    audio_enabled: bool | None = None
+    video_enabled: bool | None = None
+
+
 class UnitUpdate(BaseModel):
     lines: list[LineItem] | None = None
     motion_prompt: str | None = None
+
+
+class GenerateAllOut(BaseModel):
+    # 放进队列的单元数；0 表示都已是最新
+    queued: int
 
 
 class JobEnqueuedOut(BaseModel):

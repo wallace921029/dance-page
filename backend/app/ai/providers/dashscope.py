@@ -1,10 +1,12 @@
 """阿里云百炼。"""
 
+import base64
+import binascii
 import re
 
 import httpx
 
-from app.ai.providers import ModelInfo, ProviderError, TestResult
+from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult
 from app.ai.providers.common import chat_ping, describe_error
 from app.ai.settings import CapabilityConfig
 
@@ -83,3 +85,84 @@ def list_models(
         key=_version_rank,
     )
     return [ModelInfo(id=model_id, order=i + 1) for i, model_id in enumerate(ids)]
+
+
+# 按描述设计音色的模型；设计出的音色只能用于创建时指定的合成模型（qwen3-tts-vd-*）
+VOICE_DESIGN_MODEL = "qwen-voice-design"
+# 设计一个音色并合成试听，实测十几秒
+VOICE_DESIGN_TIMEOUT = 90.0
+
+
+def design_voice(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    prompt: str,
+    preview_text: str,
+    name: str,
+) -> DesignedVoice:
+    if "tts-vd" not in config.model:
+        raise ProviderError(
+            f"按描述设计音色只支持 qwen3-tts-vd 系列朗读模型，当前是 {config.model}，"
+            "请在「AI 配置」中更换朗读模型"
+        )
+    res = client.post(
+        f"{config.base_url.rstrip('/')}/services/audio/tts/customization",
+        headers={"Authorization": f"Bearer {credentials['api_key']}"},
+        json={
+            "model": VOICE_DESIGN_MODEL,
+            "input": {
+                "action": "create",
+                "target_model": config.model,
+                "voice_prompt": prompt,
+                "preview_text": preview_text,
+                "preferred_name": name,
+            },
+        },
+        timeout=VOICE_DESIGN_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        output = res.json()["output"]
+        return DesignedVoice(
+            voice_id=output["voice"],
+            preview_wav=base64.b64decode(output["preview_audio"]["data"], validate=True),
+        )
+    except (ValueError, KeyError, TypeError, binascii.Error) as e:
+        raise ProviderError("服务商返回的音色结果无法识别") from e
+
+
+# 合成一句台词（非流式，返回音频下载地址）
+SYNTHESIZE_TIMEOUT = 60.0
+
+
+def synthesize(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    text: str,
+    voice: str,
+) -> bytes:
+    res = client.post(
+        f"{config.base_url.rstrip('/')}/services/aigc/multimodal-generation/generation",
+        headers={"Authorization": f"Bearer {credentials['api_key']}"},
+        json={"model": config.model, "input": {"text": text, "voice": voice}},
+        timeout=SYNTHESIZE_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        audio = res.json()["output"]["audio"]
+        if audio.get("data"):
+            return base64.b64decode(audio["data"], validate=True)
+        url = audio["url"]
+    except (ValueError, KeyError, TypeError, binascii.Error) as e:
+        raise ProviderError("服务商返回的合成结果无法识别") from e
+    # 下载地址是服务商的临时存储链接（24 小时有效），不需要 Key
+    download = client.get(url, timeout=SYNTHESIZE_TIMEOUT)
+    if download.status_code != 200:
+        raise ProviderError(f"下载合成音频失败：HTTP {download.status_code}")
+    return download.content

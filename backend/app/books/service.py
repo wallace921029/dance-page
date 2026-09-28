@@ -3,7 +3,7 @@ from pathlib import PurePath
 
 from sqlalchemy.orm import Session
 
-from app.models import Book, Job
+from app.models import AiUnit, Book, Job
 
 
 def title_from_filename(filename: str) -> str:
@@ -36,3 +36,7 @@ def cover_url(book: Book) -> str | None:
 
 def page_url(book: Book, index: int) -> str:
     return f"/api/books/{book.id}/pages/{index}?v={book.assets_version}"
+
+
+def reader_audio_url(book: Book, unit: AiUnit) -> str:
+    return f"/api/books/{book.id}/ai/audio/{unit.id}?v={unit.audio_version}"

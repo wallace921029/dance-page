@@ -89,12 +89,29 @@ export interface ShelfBook {
   cover_aspect: number;
   is_favorite: boolean;
   favorited_at: string | null;
+  /** 管理员确认过朗读（D70：书名前显示音乐符号） */
+  voice_ready: boolean;
+  dance_ready: boolean;
 }
+
+/** 一个生成单元的朗读 / 动画；只有确认过的那一类产物才会出现 */
+export interface ReaderUnit {
+  /** 单页，或合并生成的左右两页 */
+  pages: number[];
+  audio_url: string | null;
+  audio_duration_ms: number | null;
+  video_url: string | null;
+}
+
+export type ReadOrder = "left_first" | "right_first";
 
 export interface ReaderBook extends ShelfBook {
   language: Language | null;
   spread_start_page: SpreadStartPage;
   pages: BookPage[];
+  /** 对开时"分别生成"的两页的朗读顺序（D69） */
+  read_order: ReadOrder;
+  units: ReaderUnit[];
 }
 
 // ---------- AI 配置（backend/app/ai/schemas.py） ----------
@@ -191,7 +208,21 @@ export interface AiModelList {
 export interface AiLineItem {
   character_id: number | null;
   text: string;
+  /** 书上原文之外补充的内容（D93） */
+  added?: boolean;
 }
+
+export interface CharacterVoice {
+  id: number;
+  provider: AiProviderId;
+  tts_model: string;
+  voice_prompt_used: string | null;
+  created_at: string;
+  /** 试听音频（WAV），仅后台可访问 */
+  preview_url: string;
+}
+
+export type AiTaskStatus = "none" | "queued" | "running" | "ready" | "failed";
 
 export interface Character {
   id: number;
@@ -200,6 +231,12 @@ export interface Character {
   is_narrator: boolean;
   voice_prompt: string | null;
   sort_order: number;
+  /** 当前朗读设置（服务商 + 合成模型）下的音色（D78） */
+  voice: CharacterVoice | null;
+  voice_status: AiTaskStatus;
+  voice_error: string | null;
+  /** 音色描述在生成音色后又改过 */
+  voice_outdated: boolean;
 }
 
 export interface AiUnit {
@@ -209,8 +246,11 @@ export interface AiUnit {
   page_count: number;
   lines: AiLineItem[];
   motion_prompt: string | null;
-  audio_status: "none" | "queued" | "running" | "ready" | "failed";
-  video_status: "none" | "queued" | "running" | "ready" | "failed";
+  /** 开页的"朗读""动画"开关（D95） */
+  audio_enabled: boolean;
+  video_enabled: boolean;
+  audio_status: AiTaskStatus;
+  video_status: AiTaskStatus;
   audio_error: string | null;
   video_error: string | null;
   audio_source_hash: string | null;
@@ -222,6 +262,10 @@ export interface AiUnit {
   video_version: number;
   created_at: string;
   updated_at: string;
+  /** 已生成的朗读（后台试听）；重新生成期间仍可听旧的 */
+  audio_url: string | null;
+  /** 台词或音色在生成朗读之后改过 */
+  audio_outdated: boolean;
 }
 
 export interface Spread {
@@ -229,6 +273,9 @@ export interface Spread {
   left_page_index: number | null;
   right_page_index: number | null;
   mode: "single" | "separate" | "merged";
+  /** 关闭后一键生成跳过、阅读端也不播放（D95） */
+  audio_enabled: boolean;
+  video_enabled: boolean;
   units: AiUnit[];
 }
 
@@ -249,7 +296,7 @@ export interface AiJob {
 
 export interface BookAi {
   story: string | null;
-  read_order: "left_first" | "right_first";
+  read_order: ReadOrder;
   voice_ready_at: string | null;
   dance_ready_at: string | null;
   characters: Character[];

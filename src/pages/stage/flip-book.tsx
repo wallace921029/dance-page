@@ -22,8 +22,15 @@ type FlipBookProps = {
   spreadStartPage: SpreadStartPage;
   /** 舞台背景，舞台页里会画一块与它对齐的背景 */
   background: string;
-  /** 当前可见的页码（从 0 开始） */
-  onVisibleChange: (pages: number[]) => void;
+  /**
+   * 当前可见的页码（从 0 开始）。slots 按位置给出：单页时 1 项，对开时 [左, 右]；
+   * 舞台页、空白页为 null（如对开时封面在右半边，slots 为 [null, 0]）
+   */
+  onVisibleChange: (pages: number[], slots: (number | null)[]) => void;
+  /** 开始拖动或翻页时为 true，翻页停稳后为 false */
+  onFlippingChange?: (flipping: boolean) => void;
+  /** 叠在书上方、与书同尺寸的一层（如朗读按钮）；翻页库不管理这一层 */
+  overlay?: (layout: BookOverlayLayout) => React.ReactNode;
   /** 首次排版完成且封面图片加载好时调用一次 */
   onReady?: () => void;
   ref?: React.Ref<FlipBookHandle>;
@@ -37,6 +44,12 @@ type FlipBookProps = {
  */
 type BookItem = number | "blank" | "stage";
 
+export interface BookOverlayLayout {
+  isDouble: boolean;
+  pageWidth: number;
+  pageHeight: number;
+}
+
 function buildItems(pageCount: number, isDouble: boolean, spreadStartPage: SpreadStartPage) {
   const pages: BookItem[] = Array.from({ length: pageCount }, (_, i) => i);
   if (!isDouble) return pages;
@@ -49,11 +62,11 @@ function buildItems(pageCount: number, isDouble: boolean, spreadStartPage: Sprea
   return items;
 }
 
-/** index 为对开左页（单页模式下为当前页）在 items 中的位置 */
-function visiblePages(items: BookItem[], index: number, isDouble: boolean) {
+/** index 为对开左页（单页模式下为当前页）在 items 中的位置；返回各位置上的页码 */
+function visibleSlots(items: BookItem[], index: number, isDouble: boolean) {
   return items
     .slice(index, index + (isDouble ? 2 : 1))
-    .filter((item): item is number => typeof item === "number");
+    .map((item) => (typeof item === "number" ? item : null));
 }
 
 function useElementSize(ref: React.RefObject<HTMLElement | null>) {
@@ -77,7 +90,9 @@ export function FlipBook({
   spreadStartPage,
   background,
   onVisibleChange,
+  onFlippingChange,
   onReady,
+  overlay,
   ref,
 }: FlipBookProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -87,9 +102,11 @@ export function FlipBook({
   const coverIndexRef = useRef(0);
   // 回调放进 ref，避免父组件每次渲染传入新函数时重建整个翻页组件
   const onVisibleChangeRef = useRef(onVisibleChange);
+  const onFlippingChangeRef = useRef(onFlippingChange);
   const onReadyRef = useRef(onReady);
   useLayoutEffect(() => {
     onVisibleChangeRef.current = onVisibleChange;
+    onFlippingChangeRef.current = onFlippingChange;
     onReadyRef.current = onReady;
   });
   const readyFiredRef = useRef(false);
@@ -212,12 +229,17 @@ export function FlipBook({
     window.addEventListener("resize", alignStageBackdrops);
 
     const onFlip = (index: number) => {
-      const visible = visiblePages(items, index, isDouble);
+      const slots = visibleSlots(items, index, isDouble);
+      const visible = slots.filter((page): page is number => page !== null);
       currentPageRef.current = visible[0] ?? 0;
-      onVisibleChangeRef.current(visible);
+      onVisibleChangeRef.current(visible, slots);
       loadAround(index);
     };
     pageFlip.on("flip", (e) => onFlip(e.data));
+    // 状态：read（停稳）、fold_corner（鼠标移到角上卷起一点）、user_fold（拖动中）、flipping（翻页动画）
+    pageFlip.on("changeState", (e) =>
+      onFlippingChangeRef.current?.(e.data === "user_fold" || e.data === "flipping"),
+    );
     onFlip(startPage);
     flipRef.current = pageFlip;
     coverIndexRef.current = coverIndex;
@@ -231,10 +253,26 @@ export function FlipBook({
   }, [pages, isDouble, spreadStartPage, background, pageWidth, pageHeight]);
 
   return (
-    <div
-      ref={hostRef}
-      className="absolute inset-0 flex items-center justify-center"
-      style={{ padding: BOOK_PADDING_CSS }}
-    />
+    <>
+      <div
+        ref={hostRef}
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ padding: BOOK_PADDING_CSS }}
+      />
+      {overlay && pageWidth >= 50 && (
+        // 与 host 相同的排版，中间放一个与书同尺寸的框；框外不拦截触摸，翻页照常
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          style={{ padding: BOOK_PADDING_CSS }}
+        >
+          <div
+            className="relative flex-none"
+            style={{ width: pageWidth * (isDouble ? 2 : 1), height: pageHeight }}
+          >
+            {overlay({ isDouble, pageWidth, pageHeight })}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

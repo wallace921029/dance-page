@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  AudioLines,
+  BadgeCheck,
   BookOpen,
+  CircleAlert,
   Combine,
   Edit2,
   Film,
+  MoreHorizontal,
+  Play,
   Plus,
   RefreshCw,
   Sparkles,
   Split,
+  Square,
   Trash2,
   Volume2,
 } from "lucide-react";
@@ -17,7 +23,13 @@ import {
   useBookAi,
   useCreateCharacter,
   useDeleteCharacter,
+  useDesignVoice,
   useDraftAiUnit,
+  useGenerateAllAudio,
+  useGenerateSpreadAudio,
+  useGenerateUnitAudio,
+  useSetVoiceReady,
+  useUpdateSpreadSwitches,
   useUpdateAiUnit,
   useUpdateBookAi,
   useUpdateCharacter,
@@ -27,10 +39,12 @@ import type {
   AdminBookDetail,
   AiLineItem,
   AiUnit,
+  BookAi,
   BookPage,
   Character,
   Spread,
 } from "@/api/types";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,11 +60,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -69,10 +93,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { getErrorMessage } from "@/lib/api";
+
+/** 对开时"分别生成"的两页的朗读顺序（D69） */
+const READ_ORDER_ITEMS = [
+  { value: "left_first", label: "先左后右" },
+  { value: "right_first", label: "先右后左" },
+];
 
 interface AiWorkbenchProps {
   book: AdminBookDetail;
@@ -82,44 +114,6 @@ interface AiWorkbenchProps {
 
 export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchProps) {
   const { data: bookAi, isPending, error } = useBookAi(book.id);
-  const analyze = useAnalyzeBook(book.id);
-  const updateAi = useUpdateBookAi(book.id);
-
-  const isAnalyzing = Boolean(
-    bookAi?.running_jobs?.some((j) => j.type === "ai_analyze_book" && j.status !== "failed"),
-  );
-  const [analyzeOpen, setAnalyzeOpen] = useState(false);
-
-  const handleStartAnalysis = () => {
-    setAnalyzeOpen(false);
-    analyze.mutate(undefined, {
-      onSuccess: () =>
-        toast.add({
-          title: "故事分析任务已提交",
-          description: "正在由视觉大模型通读全部页面，约需 1–2 分钟…",
-          type: "success",
-        }),
-      onError: (err) =>
-        toast.add({ title: "提交分析任务失败", description: getErrorMessage(err), type: "error" }),
-    });
-  };
-
-  const handleReadOrderChange = (value: string | null) => {
-    if (value === "left_first" || value === "right_first") {
-      updateAi.mutate(
-        { read_order: value },
-        {
-          onSuccess: () => toast.add({ title: "已更新朗读顺序", type: "success" }),
-          onError: (err) =>
-            toast.add({
-              title: "更新朗读顺序失败",
-              description: getErrorMessage(err),
-              type: "error",
-            }),
-        },
-      );
-    }
-  };
 
   if (isPending) {
     return (
@@ -142,76 +136,42 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
     );
   }
 
+  const analyzed = bookAi.spreads.some((s) => s.units.length > 0);
+
   return (
     <div className="space-y-6">
-      {/* 顶部工具栏 */}
+      {/* 顶部：流程说明 */}
       <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="size-5 text-amber-500" />
-              页面与 AI 工作台（{book.page_count} 页）
-            </CardTitle>
-            <CardDescription className="mt-1">
-              通读全书分析角色与大纲，按开页分别/合并生成台词与微动作草稿。
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">朗读顺序：</span>
-              <Select
-                value={bookAi.read_order}
-                onValueChange={handleReadOrderChange}
-                disabled={updateAi.isPending}
-              >
-                <SelectTrigger className="w-[120px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="left_first">先左后右</SelectItem>
-                  <SelectItem value="right_first">先右后左</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <AlertDialog open={analyzeOpen} onOpenChange={setAnalyzeOpen}>
-              <AlertDialogTrigger
-                render={
-                  <Button variant="default" disabled={isAnalyzing || analyze.isPending}>
-                    {isAnalyzing || analyze.isPending ? (
-                      <>
-                        <Spinner className="size-4" />
-                        分析故事中…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="size-4" />
-                        分析整本故事
-                      </>
-                    )}
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>分析整本故事？</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    视觉大模型将通读全书所有页面，重新提取故事梗概、角色设定、逐页台词和微动作草稿。已有草稿将被覆盖重置。约需
-                    1–2 分钟。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleStartAnalysis}>开始分析</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="size-5 text-amber-500" />
+            页面与 AI 工作台
+          </CardTitle>
+          <CardDescription>
+            {book.page_count} 页 · 先分析整本故事并校对台词，为角色生成音色，再生成朗读并确认 Voice
+            Ready。
+          </CardDescription>
         </CardHeader>
+        {!analyzed && (
+          <CardContent>
+            <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+              还没有分析故事。在下方「故事与角色」里点「分析整本故事」开始。
+            </p>
+          </CardContent>
+        )}
       </Card>
 
       {/* 故事与角色卡片 */}
       <StoryAndCharactersCard bookId={book.id} bookAi={bookAi} />
+
+      {/* 各类 AI 产物的进度和一键操作，是下方开页列表的总览（A4 在这里加"动画"一行） */}
+      {analyzed && (
+        <Card>
+          <CardContent>
+            <AudioPipelineRow bookId={book.id} bookAi={bookAi} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* 开页列表 */}
       <div className="space-y-6">
@@ -232,10 +192,267 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
 }
 
 // ============================================================================
+// 朗读：进度 + 全部生成 + Voice Ready + 朗读设置
+// ============================================================================
+
+function AudioPipelineRow({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
+  const generateAll = useGenerateAllAudio(bookId);
+  const updateAi = useUpdateBookAi(bookId);
+
+  const allUnits = bookAi.spreads.flatMap((s) => s.units);
+  const spoken = allUnits.filter((u) => u.lines.some((l) => l.text.trim()));
+  const units = spoken.filter((u) => u.audio_enabled);
+  const ready = units.filter((u) => u.audio_url).length;
+  const outdated = units.filter((u) => u.audio_url && u.audio_outdated).length;
+  const running = units.filter(
+    (u) => u.audio_status === "queued" || u.audio_status === "running",
+  ).length;
+  const failed = units.filter((u) => u.audio_status === "failed").length;
+  const disabled = spoken.length - units.length;
+
+  const summary = [
+    `已生成 ${ready} / ${units.length} 个单元`,
+    running && `${running} 个生成中`,
+    outdated && `${outdated} 个需要重新生成`,
+    failed && `${failed} 个失败`,
+    disabled && `${disabled} 个已关闭朗读`,
+  ].filter(Boolean);
+
+  const handleGenerateAll = () => {
+    generateAll.mutate(undefined, {
+      onSuccess: ({ queued }) =>
+        toast.add(
+          queued
+            ? {
+                title: `已加入 ${queued} 个单元`,
+                description: "正在逐个生成朗读，每个单元约需十几秒…",
+                type: "success",
+              }
+            : { title: "所有朗读都已是最新", type: "success" },
+        ),
+      onError: (err) =>
+        toast.add({ title: "全部生成朗读失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  const handleReadOrderChange = (value: string) => {
+    if (value !== "left_first" && value !== "right_first") return;
+    updateAi.mutate(
+      { read_order: value },
+      {
+        onSuccess: () => toast.add({ title: "已更新朗读顺序", type: "success" }),
+        onError: (err) =>
+          toast.add({ title: "更新朗读顺序失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+          <Volume2 className="size-4 text-muted-foreground" />
+        </div>
+        <Progress
+          value={units.length ? (ready / units.length) * 100 : 0}
+          aria-label="朗读生成进度"
+          className="min-w-0 flex-1 gap-1.5"
+        >
+          <div className="flex w-full flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium">朗读</span>
+            <span className="text-xs text-muted-foreground">{summary.join(" · ")}</span>
+          </div>
+        </Progress>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={handleGenerateAll}
+          disabled={generateAll.isPending || running > 0}
+          title="为未生成、失败或台词 / 音色已修改的单元生成朗读；关闭了朗读的开页跳过"
+        >
+          {running > 0 || generateAll.isPending ? (
+            <Spinner className="size-4" />
+          ) : (
+            <Volume2 className="size-4" />
+          )}
+          {running > 0 ? "生成中…" : "全部生成"}
+        </Button>
+        <VoiceReadyControl bookId={bookId} bookAi={bookAi} />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="朗读设置" title="朗读设置" />
+            }
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>对开时的朗读顺序</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={bookAi.read_order}
+                onValueChange={handleReadOrderChange}
+              >
+                {READ_ORDER_ITEMS.map((item) => (
+                  <DropdownMenuRadioItem key={item.value} value={item.value} closeOnClick>
+                    {item.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Voice Ready 确认
+// ============================================================================
+
+function VoiceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
+  const setVoiceReady = useSetVoiceReady(bookId);
+  const [open, setOpen] = useState(false);
+  const isReady = bookAi.voice_ready_at !== null;
+
+  const units = bookAi.spreads.flatMap((s) => s.units).filter((u) => u.audio_enabled);
+  const withAudio = units.filter((u) => u.audio_url).length;
+  const missing = units.filter((u) => !u.audio_url && u.lines.some((l) => l.text.trim())).length;
+  const outdated = units.filter((u) => u.audio_url && u.audio_outdated).length;
+
+  const handleConfirm = () => {
+    setOpen(false);
+    setVoiceReady.mutate(!isReady, {
+      onSuccess: () =>
+        toast.add({
+          title: isReady ? "已取消 Voice Ready" : "已确认 Voice Ready",
+          description: isReady ? "读者暂时听不到这本书的朗读" : "读者现在可以听这本书的朗读了",
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "操作失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          isReady ? (
+            <Button
+              variant="outline"
+              className="border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+              disabled={setVoiceReady.isPending}
+            >
+              <BadgeCheck className="size-4" />
+              Voice Ready
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              disabled={setVoiceReady.isPending || withAudio === 0}
+              title={withAudio === 0 ? "还没有生成任何朗读" : undefined}
+            >
+              <BadgeCheck className="size-4" />
+              确认 Voice Ready
+            </Button>
+          )
+        }
+      />
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{isReady ? "取消 Voice Ready？" : "确认 Voice Ready？"}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isReady
+              ? "取消后读者听不到这本书的朗读，书架上的音乐符号也会去掉；已生成的朗读会保留，可以随时再确认。"
+              : `确认后，读者在书架上会看到音乐符号，阅读时有朗读的页面会出现小喇叭。已生成朗读的单元：${withAudio} 个。`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {!isReady && (missing > 0 || outdated > 0) && (
+          <Alert className="text-xs">
+            <CircleAlert />
+            <AlertDescription className="text-xs">
+              {missing > 0 && <p>还有 {missing} 个有台词的单元没有生成朗读，这些页面不会出现小喇叭。</p>}
+              {outdated > 0 && (
+                <p>{outdated} 个单元的台词或音色改过但还没重新生成，读者听到的是旧版朗读。</p>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel>{isReady ? "保留" : "再看看"}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirm}
+            variant={isReady ? "destructive" : "default"}
+          >
+            {isReady ? "取消 Voice Ready" : "确认"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ============================================================================
+// 分析整本故事（放在"故事与角色"卡片右上角：它生成的就是故事、角色和全部草稿）
+// ============================================================================
+
+function AnalyzeBookButton({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
+  const analyze = useAnalyzeBook(bookId);
+  const [open, setOpen] = useState(false);
+  const isAnalyzing =
+    analyze.isPending || bookAi.running_jobs.some((j) => j.type === "ai_analyze_book");
+  const analyzed = bookAi.spreads.some((s) => s.units.length > 0);
+
+  const handleStart = () => {
+    setOpen(false);
+    analyze.mutate(undefined, {
+      onSuccess: () =>
+        toast.add({
+          title: "故事分析任务已提交",
+          description: "正在由视觉大模型通读全部页面，约需几分钟…",
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "提交分析任务失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          <Button size="sm" variant={analyzed ? "outline" : "default"} disabled={isAnalyzing}>
+            {isAnalyzing ? <Spinner className="size-4" /> : <Sparkles className="size-4" />}
+            {isAnalyzing ? "分析故事中…" : analyzed ? "重新分析整本故事" : "分析整本故事"}
+          </Button>
+        }
+      />
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{analyzed ? "重新分析整本故事？" : "分析整本故事？"}</AlertDialogTitle>
+          <AlertDialogDescription>
+            视觉大模型将通读全书所有页面，提取故事梗概、角色设定、逐页朗读稿（保留原文并适度补充）和微动作草稿，约需几分钟。
+            {analyzed && "已有的草稿会被覆盖，角色已生成的音色和朗读也会一并清除。"}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction onClick={handleStart}>开始分析</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ============================================================================
 // 故事与角色管理卡片
 // ============================================================================
 
-function StoryAndCharactersCard({ bookId, bookAi }: { bookId: string; bookAi: any }) {
+function StoryAndCharactersCard({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
   const updateAi = useUpdateBookAi(bookId);
   const [story, setStory] = useState(bookAi.story || "");
   const [isAddingChar, setIsAddingChar] = useState(false);
@@ -267,6 +484,9 @@ function StoryAndCharactersCard({ bookId, bookAi }: { bookId: string; bookAi: an
         <CardDescription>
           故事整体背景和大纲，以及提取出的说话角色。台词识别与朗读合成将参考此设定。
         </CardDescription>
+        <CardAction>
+          <AnalyzeBookButton bookId={bookId} bookAi={bookAi} />
+        </CardAction>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* 故事大纲 */}
@@ -305,7 +525,7 @@ function StoryAndCharactersCard({ bookId, bookAi }: { bookId: string; bookAi: an
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {bookAi.characters.map((char: Character) => (
+              {bookAi.characters.map((char) => (
                 <CharacterItem key={char.id} bookId={bookId} character={char} />
               ))}
             </div>
@@ -358,7 +578,7 @@ function CharacterItem({ bookId, character }: { bookId: string; character: Chara
                 <AlertDialogHeader>
                   <AlertDialogTitle>删除角色「{character.name}」？</AlertDialogTitle>
                   <AlertDialogDescription>
-                    已分配给该角色的台词说话人将被重置为空，音色也将被移除。
+                    已分配给该角色的台词将改由旁白朗读，该角色的音色也会一并删除。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -388,6 +608,8 @@ function CharacterItem({ bookId, character }: { bookId: string; character: Chara
         </p>
       </div>
 
+      <CharacterVoicePanel bookId={bookId} character={character} />
+
       <CharacterEditDialog
         bookId={bookId}
         character={character}
@@ -395,6 +617,168 @@ function CharacterItem({ bookId, character }: { bookId: string; character: Chara
         onOpenChange={setIsEditing}
       />
     </div>
+  );
+}
+
+// 同一时间只播放一段试听
+let playingPreview: HTMLAudioElement | null = null;
+
+function CharacterVoicePanel({ bookId, character }: { bookId: string; character: Character }) {
+  const designVoice = useDesignVoice(bookId);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { voice, voice_status: status } = character;
+  const isBusy = status === "queued" || status === "running" || designVoice.isPending;
+  const hasPrompt = Boolean(character.voice_prompt?.trim());
+
+  const handleDesign = () => {
+    setConfirmOpen(false);
+    designVoice.mutate(character.id, {
+      onSuccess: () =>
+        toast.add({
+          title: "音色生成任务已提交",
+          description: `正在为「${character.name}」设计音色，约需十几秒…`,
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "提交音色任务失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  const designButton = (
+    <Button
+      size="xs"
+      variant="outline"
+      disabled={isBusy || !hasPrompt}
+      title={hasPrompt ? undefined : "请先填写音色描述"}
+      onClick={voice ? undefined : handleDesign}
+    >
+      {isBusy ? <Spinner className="size-3" /> : <AudioLines className="size-3" />}
+      {voice ? "重新生成" : "生成音色"}
+    </Button>
+  );
+
+  return (
+    <div className="mt-3 space-y-2 border-t pt-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <VoiceStatusBadge status={status} />
+          {voice && character.voice_outdated && status !== "queued" && status !== "running" && (
+            <Badge
+              variant="outline"
+              className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+              title="音色描述在生成音色后改过，重新生成后才会生效"
+            >
+              描述已修改
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {voice && (
+            <AudioPreviewButton url={voice.preview_url} label={`「${character.name}」的音色`} />
+          )}
+          {voice ? (
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <AlertDialogTrigger render={designButton} />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>重新生成「{character.name}」的音色？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    将按当前的音色描述重新设计，新音色会替换现在的音色；已经生成的朗读不受影响，重新生成朗读时才会用上新音色。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDesign}>重新生成</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            designButton
+          )}
+        </div>
+      </div>
+      {status === "failed" && character.voice_error && (
+        <Alert variant="destructive" className="px-2 py-1.5 text-xs">
+          <CircleAlert />
+          <AlertDescription className="text-xs">{character.voice_error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+function VoiceStatusBadge({ status }: { status: Character["voice_status"] }) {
+  if (status === "ready") {
+    return (
+      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">
+        音色已就绪
+      </Badge>
+    );
+  }
+  if (status === "queued" || status === "running") {
+    return (
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+        {status === "queued" ? "音色排队中" : "音色生成中"}
+      </Badge>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <Badge variant="destructive" className="text-[10px]">
+        音色生成失败
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+      未生成音色
+    </Badge>
+  );
+}
+
+function AudioPreviewButton({ url, label }: { url: string; label: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // 地址变了（重新生成）或卸载时停止播放
+  useEffect(() => {
+    return () => {
+      audioRef.current?.pause();
+      audioRef.current = null;
+    };
+  }, [url]);
+
+  const toggle = () => {
+    if (isPlaying) {
+      audioRef.current?.pause();
+      return;
+    }
+    if (!audioRef.current) {
+      const audio = new Audio(url);
+      audio.onplay = () => setIsPlaying(true);
+      audio.onpause = () => setIsPlaying(false);
+      audio.onended = () => setIsPlaying(false);
+      audioRef.current = audio;
+    }
+    const audio = audioRef.current;
+    if (playingPreview && playingPreview !== audio) playingPreview.pause();
+    playingPreview = audio;
+    audio.currentTime = 0;
+    audio.play().catch((err) => {
+      setIsPlaying(false);
+      toast.add({ title: "无法播放试听", description: getErrorMessage(err), type: "error" });
+    });
+  };
+
+  return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      onClick={toggle}
+      title={isPlaying ? "停止试听" : `试听${label}`}
+    >
+      {isPlaying ? <Square className="size-3" /> : <Play className="size-3" />}
+    </Button>
   );
 }
 
@@ -585,7 +969,46 @@ function SpreadCard({
   isSettingCover,
 }: SpreadCardProps) {
   const updateSpreadMode = useUpdateSpreadMode(bookId);
+  const updateSwitches = useUpdateSpreadSwitches(bookId);
+  const generateSpreadAudio = useGenerateSpreadAudio(bookId);
   const hasTwoPages = spread.left_page_index !== null && spread.right_page_index !== null;
+  // 开页的第一页：接口用它指代开页
+  const firstPage = (spread.left_page_index ?? spread.right_page_index)!;
+  const hasUnits = spread.units.length > 0;
+
+  const spokenUnits = spread.units.filter((u) => u.lines.some((l) => l.text.trim()));
+  const spreadMissingVoices = [
+    ...new Set(spokenUnits.flatMap((u) => missingVoiceNames(u, characters))),
+  ];
+  const isSpreadAudioBusy =
+    generateSpreadAudio.isPending ||
+    spread.units.some((u) => u.audio_status === "queued" || u.audio_status === "running");
+
+  const handleSwitch = (field: "audio_enabled" | "video_enabled", enabled: boolean) => {
+    const label = field === "audio_enabled" ? "朗读" : "动画";
+    updateSwitches.mutate(
+      { firstPage, [field]: enabled },
+      {
+        onSuccess: () =>
+          toast.add({
+            title: enabled ? `已打开这个开页的${label}` : `已关闭这个开页的${label}`,
+            description: enabled
+              ? undefined
+              : `一键生成时会跳过，阅读时也不${label === "朗读" ? "朗读" : "播放动画"}；已生成的内容保留。`,
+            type: "success",
+          }),
+        onError: (err) =>
+          toast.add({ title: "设置失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+  };
+
+  const handleGenerateSpreadAudio = () => {
+    generateSpreadAudio.mutate(firstPage, {
+      onError: (err) =>
+        toast.add({ title: "生成本开页朗读失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
 
   const handleToggleMode = (mode: "separate" | "merged") => {
     if (!hasTwoPages || mode === spread.mode) return;
@@ -624,8 +1047,8 @@ function SpreadCard({
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/40 py-3">
-        <div className="flex items-center gap-3">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b bg-muted/40 py-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-semibold text-sm">{spreadTitle}</span>
           {spread.mode === "merged" && (
             <Badge variant="outline" className="bg-background text-xs">
@@ -633,32 +1056,79 @@ function SpreadCard({
               左右合并生成
             </Badge>
           )}
+          {hasUnits && (
+            <div className="flex items-center gap-3 text-xs">
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <Switch
+                  size="sm"
+                  checked={spread.audio_enabled}
+                  onCheckedChange={(checked) => handleSwitch("audio_enabled", checked)}
+                  disabled={updateSwitches.isPending}
+                />
+                <Volume2 className="size-3.5 text-muted-foreground" />
+                朗读
+              </label>
+              <label
+                className="flex cursor-pointer items-center gap-1.5"
+                title="关闭后不生成动画（动画功能开发中）"
+              >
+                <Switch
+                  size="sm"
+                  checked={spread.video_enabled}
+                  onCheckedChange={(checked) => handleSwitch("video_enabled", checked)}
+                  disabled={updateSwitches.isPending}
+                />
+                <Film className="size-3.5 text-muted-foreground" />
+                动画
+              </label>
+            </div>
+          )}
         </div>
 
-        {hasTwoPages && (
-          <div className="flex items-center rounded-lg border bg-background p-0.5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
+          {spread.audio_enabled && spokenUnits.length > 0 && (
             <Button
               size="xs"
-              variant={spread.mode === "separate" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
-              onClick={() => handleToggleMode("separate")}
-              disabled={updateSpreadMode.isPending}
+              variant="outline"
+              className="h-7 bg-background"
+              onClick={handleGenerateSpreadAudio}
+              disabled={isSpreadAudioBusy || spreadMissingVoices.length > 0}
+              title={
+                spreadMissingVoices.length > 0
+                  ? `请先为「${spreadMissingVoices.join("」「")}」生成音色`
+                  : "为这个开页的所有单元生成朗读（使用已保存的台词）"
+              }
             >
-              <Split className="mr-1 size-3" />
-              分别生成
+              {isSpreadAudioBusy ? <Spinner className="size-3" /> : <Volume2 className="size-3" />}
+              {spread.units.some((u) => u.audio_url) ? "重新生成本开页朗读" : "生成本开页朗读"}
             </Button>
-            <Button
-              size="xs"
-              variant={spread.mode === "merged" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs"
-              onClick={() => handleToggleMode("merged")}
-              disabled={updateSpreadMode.isPending}
-            >
-              <Combine className="mr-1 size-3" />
-              合并生成
-            </Button>
-          </div>
-        )}
+          )}
+
+          {hasTwoPages && (
+            <div className="flex items-center rounded-lg border bg-background p-0.5 shadow-2xs">
+              <Button
+                size="xs"
+                variant={spread.mode === "separate" ? "secondary" : "ghost"}
+                className="h-7 px-2.5 text-xs"
+                onClick={() => handleToggleMode("separate")}
+                disabled={updateSpreadMode.isPending}
+              >
+                <Split className="mr-1 size-3" />
+                分别生成
+              </Button>
+              <Button
+                size="xs"
+                variant={spread.mode === "merged" ? "secondary" : "ghost"}
+                className="h-7 px-2.5 text-xs"
+                onClick={() => handleToggleMode("merged")}
+                disabled={updateSpreadMode.isPending}
+              >
+                <Combine className="mr-1 size-3" />
+                合并生成
+              </Button>
+            </div>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="grid grid-cols-1 gap-6 p-4 md:grid-cols-12 md:p-6">
@@ -772,10 +1242,13 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
     });
   };
 
+  const narratorId = characters.find((c) => c.is_narrator)?.id ?? null;
+  const speakerItems = characters.map((c) => ({ value: c.id, label: c.name }));
+
   const handleAddLine = () => {
     const defaultSpeaker =
       characters.find((c) => c.is_narrator)?.id ?? (characters[0]?.id ?? null);
-    setLines([...lines, { character_id: defaultSpeaker, text: "" }]);
+    setLines([...lines, { character_id: defaultSpeaker, text: "", added: true }]);
   };
 
   const handleLineChange = (index: number, field: keyof AiLineItem, val: any) => {
@@ -805,7 +1278,6 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
         <div className="flex items-center gap-2">
           <span className="font-medium text-xs text-foreground/90">{unitLabel}</span>
           <div className="flex items-center gap-1.5">
-            <AudioStatusBadge status={unit.audio_status} />
             <VideoStatusBadge status={unit.video_status} />
           </div>
         </div>
@@ -858,30 +1330,32 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
               {lines.map((line, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <Select
-                    value={line.character_id !== null ? String(line.character_id) : "narrator"}
-                    onValueChange={(val) =>
-                      handleLineChange(
-                        idx,
-                        "character_id",
-                        val === "narrator" ? null : Number(val),
-                      )
-                    }
+                    items={speakerItems}
+                    // 没指定说话人的行由旁白读（与后端生成朗读时一致）
+                    value={line.character_id ?? narratorId}
+                    onValueChange={(val) => handleLineChange(idx, "character_id", val)}
                   >
                     <SelectTrigger className="w-[110px] shrink-0 text-xs">
                       <SelectValue placeholder="说话人" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="narrator">旁白</SelectItem>
-                      {characters
-                        .filter((c) => !c.is_narrator)
-                        .map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
+                      {speakerItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
 
+                  {line.added && (
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 px-1.5 text-[10px]"
+                      title="书上原文之外补充的内容"
+                    >
+                      补充
+                    </Badge>
+                  )}
                   <Input
                     value={line.text}
                     onChange={(e) => handleLineChange(idx, "text", e.target.value)}
@@ -903,6 +1377,9 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
           )}
         </div>
 
+        {/* 朗读 */}
+        <UnitAudioRow bookId={bookId} unit={unit} characters={characters} isDirty={isDirty} />
+
         {/* 动作描述编辑 */}
         <div>
           <span className="mb-1.5 flex items-center gap-1.5 font-medium text-xs">
@@ -921,22 +1398,138 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
   );
 }
 
-function AudioStatusBadge({ status }: { status: string }) {
+function UnitAudioRow({
+  bookId,
+  unit,
+  characters,
+  isDirty,
+}: {
+  bookId: string;
+  unit: AiUnit;
+  characters: Character[];
+  isDirty: boolean;
+}) {
+  const generateAudio = useGenerateUnitAudio(bookId);
+  const isBusy =
+    unit.audio_status === "queued" || unit.audio_status === "running" || generateAudio.isPending;
+
+  const missingVoices = missingVoiceNames(unit, characters);
+  const hasLines = unit.lines.some((line) => line.text.trim());
+
+  let blockedReason: string | null = null;
+  if (!hasLines) blockedReason = "没有台词，不需要朗读";
+  else if (isDirty) blockedReason = "请先保存草稿";
+  else if (missingVoices.length) blockedReason = `请先为「${missingVoices.join("」「")}」生成音色`;
+
+  const handleGenerate = () => {
+    generateAudio.mutate(unit.id, {
+      onError: (err) =>
+        toast.add({ title: "提交朗读任务失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  if (!hasLines && !unit.audio_url) return null;
+
+  if (!unit.audio_enabled) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+        <Volume2 className="size-3.5" />
+        这个开页已关闭朗读：一键生成时跳过，阅读时也不朗读
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Volume2 className="size-3.5 text-muted-foreground" />
+            朗读
+          </span>
+          <AudioStatusBadge status={unit.audio_status} outdated={unit.audio_outdated} />
+          {unit.audio_url && unit.audio_duration_ms !== null && (
+            <span className="text-muted-foreground tabular-nums">
+              {(unit.audio_duration_ms / 1000).toFixed(1)} 秒
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {unit.audio_url && <AudioPreviewButton url={unit.audio_url} label="朗读" />}
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={handleGenerate}
+            disabled={isBusy || blockedReason !== null}
+            title={blockedReason ?? undefined}
+          >
+            {isBusy ? <Spinner className="size-3" /> : <Volume2 className="size-3" />}
+            {unit.audio_url ? "重新生成朗读" : "生成朗读"}
+          </Button>
+        </div>
+      </div>
+      {blockedReason && hasLines && !isBusy && (
+        <p className="text-xs text-muted-foreground">{blockedReason}</p>
+      )}
+      {unit.audio_status === "failed" && unit.audio_error && (
+        <Alert variant="destructive" className="px-2 py-1.5 text-xs">
+          <CircleAlert />
+          <AlertDescription className="text-xs">{unit.audio_error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+/** 单元里还没有音色的说话人（与后端一致：没指定或已删除的说话人由旁白读，空行跳过） */
+function missingVoiceNames(unit: AiUnit, characters: Character[]) {
+  const narrator = characters.find((c) => c.is_narrator);
+  const names = unit.lines
+    .filter((line) => line.text.trim())
+    .map((line) => characters.find((c) => c.id === line.character_id) ?? narrator)
+    .filter((c): c is Character => c !== undefined && !c.voice)
+    .map((c) => c.name);
+  return [...new Set(names)];
+}
+
+function AudioStatusBadge({ status, outdated }: { status: AiUnit["audio_status"]; outdated: boolean }) {
+  if (status === "queued" || status === "running") {
+    return (
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+        {status === "queued" ? "排队中" : "生成中"}
+      </Badge>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <Badge variant="destructive" className="text-[10px]">
+        生成失败
+      </Badge>
+    );
+  }
+  if (status === "ready" && outdated) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+        title="台词或音色在生成朗读之后改过"
+      >
+        需要重新生成
+      </Badge>
+    );
+  }
   if (status === "ready") {
     return (
       <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">
-        朗读已就绪
+        已就绪
       </Badge>
     );
   }
-  if (status === "running" || status === "queued") {
-    return (
-      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
-        朗读生成中
-      </Badge>
-    );
-  }
-  return null;
+  return (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+      未生成
+    </Badge>
+  );
 }
 
 function VideoStatusBadge({ status }: { status: string }) {

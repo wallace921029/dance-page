@@ -116,6 +116,20 @@ export function useDeleteCharacter(bookId: string) {
   });
 }
 
+/** 按角色的音色描述设计音色（重新生成会替换当前音色） */
+export function useDesignVoice(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (characterId: number) =>
+      (
+        await api.post<{ job_id: number; status: string }>(
+          `/admin/books/${bookId}/ai/characters/${characterId}/voice`,
+        )
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
 export function useUpdateSpreadMode(bookId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -143,3 +157,69 @@ export function useDraftAiUnit(bookId: string) {
   });
 }
 
+/** 生成（或重新生成）单元朗读 */
+export function useGenerateUnitAudio(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (unitId: string) =>
+      (await api.post<{ job_id: number; status: string }>(`/admin/ai/units/${unitId}/audio`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 全部生成朗读：未生成、失败或台词 / 音色已改的单元放进队列，返回放入的单元数 */
+export function useGenerateAllAudio(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (
+        await api.post<{ queued: number }>(`/admin/books/${bookId}/ai/generate-all`, null, {
+          params: { type: "audio" },
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 确认 / 取消 Voice Ready：确认后读者能听到已生成的朗读（D61） */
+export function useSetVoiceReady(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ready: boolean) => {
+      const url = `/admin/books/${bookId}/ai/voice-ready`;
+      return (ready ? await api.put<BookAi>(url) : await api.delete<BookAi>(url)).data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(bookAiKey(bookId), data);
+      // 书架上的音乐符号、阅读页的朗读按钮跟着变
+      void queryClient.invalidateQueries({ queryKey: ["shelf"] });
+    },
+  });
+}
+
+/** 开页的"朗读""动画"开关（D95）；first_page 为开页的第一页（没有左页时为右页） */
+export function useUpdateSpreadSwitches(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      firstPage,
+      ...body
+    }: {
+      firstPage: number;
+      audio_enabled?: boolean;
+      video_enabled?: boolean;
+    }) => (await api.patch<Spread>(`/admin/books/${bookId}/ai/spreads/${firstPage}`, body)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 生成（或重新生成）这个开页里所有单元的朗读 */
+export function useGenerateSpreadAudio(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (firstPage: number) =>
+      (await api.post<{ queued: number }>(`/admin/books/${bookId}/ai/spreads/${firstPage}/audio`))
+        .data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}

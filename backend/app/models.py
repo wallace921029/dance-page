@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.clock import utcnow
@@ -177,6 +177,9 @@ class AiUnit(Base):
     # lines: [{"character_id": int | None, "text": str}]
     lines: Mapped[list[dict]] = mapped_column(JSON, default=list)
     motion_prompt: Mapped[str | None]
+    # 开页的"朗读""动画"开关：关闭后一键生成跳过、阅读端也不播放；已生成的文件保留（D95）
+    audio_enabled: Mapped[bool] = mapped_column(default=True, server_default=true())
+    video_enabled: Mapped[bool] = mapped_column(default=True, server_default=true())
     # 'none' | 'queued' | 'running' | 'ready' | 'failed'
     audio_status: Mapped[str] = mapped_column(String(16), default="none")
     video_status: Mapped[str] = mapped_column(String(16), default="none")

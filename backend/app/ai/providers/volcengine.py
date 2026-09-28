@@ -2,9 +2,14 @@
 
 import httpx
 
-from app.ai.providers import ModelInfo, ProviderError, TestResult
+from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult
 from app.ai.providers.common import chat_ping, describe_error
 from app.ai.settings import CapabilityConfig
+
+_TTS_NOT_READY = (
+    "当前朗读服务商是火山引擎，还不支持生成音色和朗读（豆包语音需先开通合成权限），"
+    "请在「AI 配置」中把朗读切换到阿里云百炼"
+)
 
 
 def test_connection(
@@ -74,3 +79,28 @@ def list_models(
             )
         )
     return models
+
+
+def design_voice(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    prompt: str,
+    preview_text: str,
+    name: str,
+) -> DesignedVoice:
+    # 火山没有按描述设计音色的接口，按 docs/06 第 6.3 节要从现成音色清单里挑；
+    # 当前账号的豆包语音还没开通合成权限（D88），这部分暂未实现
+    raise ProviderError(_TTS_NOT_READY)
+
+
+def synthesize(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    text: str,
+    voice: str,
+) -> bytes:
+    raise ProviderError(_TTS_NOT_READY)

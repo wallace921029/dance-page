@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
-from app.books.service import cover_url, latest_job, page_url
+from app.books.service import cover_url, latest_job, page_url, reader_audio_url
 from app.models import Book
 
 Language = Literal["zh", "en"]
@@ -45,6 +45,9 @@ class ShelfBookOut(BaseModel):
     # 当前用户是否收藏（D55）
     is_favorite: bool
     favorited_at: datetime | None
+    # 管理员确认过的 AI 内容（D61、D67）：有朗读的书在书名前显示音乐符号（D70）
+    voice_ready: bool
+    dance_ready: bool
 
     @classmethod
     def of(
@@ -59,7 +62,35 @@ class ShelfBookOut(BaseModel):
             cover_aspect=cover_aspect or DEFAULT_COVER_ASPECT,
             is_favorite=favorited_at is not None,
             favorited_at=favorited_at,
+            voice_ready=book.voice_ready_at is not None,
+            dance_ready=book.dance_ready_at is not None,
         )
+
+
+class ReaderUnitOut(BaseModel):
+    """一个生成单元的朗读 / 动画。只有管理员确认过的那一类产物才会出现（docs/06 第 7 节）。"""
+
+    # 单元覆盖的页码：单页，或合并生成的左右两页
+    pages: list[int]
+    audio_url: str | None
+    audio_duration_ms: int | None
+    # 动画在 A4 加入
+    video_url: str | None = None
+
+
+def _reader_units(book: Book) -> list[ReaderUnitOut]:
+    if book.voice_ready_at is None:
+        return []
+    return [
+        ReaderUnitOut(
+            pages=list(range(u.first_page_index, u.first_page_index + u.page_count)),
+            audio_url=reader_audio_url(book, u),
+            audio_duration_ms=u.audio_duration_ms,
+        )
+        for u in sorted(book.ai_units, key=lambda u: u.first_page_index)
+        # 开页关闭朗读后读者听不到（D95）
+        if u.audio_source_hash is not None and u.audio_enabled
+    ]
 
 
 class ReaderBookOut(ShelfBookOut):
@@ -67,6 +98,9 @@ class ReaderBookOut(ShelfBookOut):
     # 跨页大图从第几页开始两两配对（D43），阅读端对开显示时使用
     spread_start_page: SpreadStartPage
     pages: list[PageOut]
+    # 对开时"分别生成"的两页的朗读顺序（D69）
+    read_order: Literal["left_first", "right_first"]
+    units: list[ReaderUnitOut]
 
     @classmethod
     def of(cls, book: Book, *, favorited_at: datetime | None) -> "ReaderBookOut":
@@ -80,6 +114,8 @@ class ReaderBookOut(ShelfBookOut):
             language=book.language,
             spread_start_page=book.spread_start_page,
             pages=_pages(book),
+            read_order=book.read_order,
+            units=_reader_units(book),
         )
 
 

@@ -1,4 +1,4 @@
-"""Worker：轮询 jobs 表，逐个执行后台任务（第一期只有 PDF 拆页）。"""
+"""Worker：轮询 jobs 表，逐个执行后台任务（PDF 拆页、AI 分析 / 草稿 / 音色 / 朗读）。"""
 
 import logging
 import time
@@ -7,8 +7,9 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.ai import audio, providers, speech, voices
 from app.ai.providers import ProviderError
-from app.ai.settings import load_active_config, load_credentials
+from app.ai.settings import load_active_config, load_credentials, missing_credentials
 from app.ai.spreads import calculate_spread_layout
 from app.ai.vision import analyze_book_story, draft_unit_content
 from app.books import storage
@@ -16,7 +17,7 @@ from app.books.render import PdfOpenError, make_cover, render_pdf
 from app.books.storage import delete_ai_unit_files
 from app.clock import utcnow
 from app.config import Settings
-from app.models import AiUnit, Book, Character, Job, Page
+from app.models import AiUnit, Book, Character, CharacterVoice, Job, Page
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,10 @@ class Worker:
             return False
         with self.session_factory() as db:
             job = db.get(Job, job_id)
-            job_type, book_id, unit_id = (
-                (job.type, job.book_id, job.unit_id) if job else (None, None, None)
+            job_type, book_id, unit_id, character_id = (
+                (job.type, job.book_id, job.unit_id, job.character_id)
+                if job
+                else (None, None, None, None)
             )
         if job_type == "render_pdf" and book_id is not None:
             self.render_book(job_id, book_id)
@@ -80,6 +83,10 @@ class Worker:
             self.analyze_book(job_id, book_id)
         elif job_type == "ai_draft_unit" and unit_id is not None:
             self.draft_unit(job_id, unit_id)
+        elif job_type == "ai_voice" and character_id is not None:
+            self.design_voice(job_id, character_id)
+        elif job_type == "ai_tts_unit" and unit_id is not None:
+            self.synthesize_unit(job_id, unit_id)
         elif job_type is not None:
             self._finish(job_id, error=f"未知的任务类型：{job_type}")
         return True
@@ -255,6 +262,7 @@ class Worker:
             db.execute(delete(AiUnit).where(AiUnit.book_id == book_id))
             db.execute(delete(Character).where(Character.book_id == book_id))
             db.flush()
+            storage.delete_ai_voice_files(self.settings, book_id)
 
             # 创建角色
             char_map: dict[str, Character] = {}
@@ -322,6 +330,7 @@ class Worker:
                         {
                             "character_id": get_char_id(line.get("character")),
                             "text": line.get("text", ""),
+                            "added": line.get("added") is True,
                         }
                         for line in p_data.get("lines", [])
                         if isinstance(line, dict)
@@ -342,6 +351,7 @@ class Worker:
                         {
                             "character_id": get_char_id(line.get("character")),
                             "text": line.get("text", ""),
+                            "added": line.get("added") is True,
                         }
                         for line in p_left_data.get("lines", [])
                         if isinstance(line, dict)
@@ -350,6 +360,7 @@ class Worker:
                         {
                             "character_id": get_char_id(line.get("character")),
                             "text": line.get("text", ""),
+                            "added": line.get("added") is True,
                         }
                         for line in p_right_data.get("lines", [])
                         if isinstance(line, dict)
@@ -468,7 +479,11 @@ class Worker:
                 return narrator_id
 
             unit.lines = [
-                {"character_id": get_cid(line.get("character")), "text": line.get("text", "")}
+                {
+                    "character_id": get_cid(line.get("character")),
+                    "text": line.get("text", ""),
+                    "added": line.get("added") is True,
+                }
                 for line in result.get("lines", [])
                 if isinstance(line, dict)
             ]
@@ -478,3 +493,156 @@ class Worker:
         self._finish(job_id)
         logger.info("单元草稿生成完成 unit=%s", unit_id)
 
+    # ---------- 角色音色 ----------
+
+    def design_voice(self, job_id: int, character_id: int) -> None:
+        logger.info("开始设计角色音色 character=%s", character_id)
+        with self.session_factory() as db:
+            character = db.get(Character, character_id)
+            if character is None:
+                self._finish(job_id, error="角色已被删除")
+                return
+            book = db.get(Book, character.book_id)
+            assert book is not None  # 角色随绘本级联删除
+            prompt = (character.voice_prompt or "").strip()
+            if not prompt:
+                self._finish(job_id, error=f"请先填写角色「{character.name}」的音色描述")
+                return
+
+            config = load_active_config(db, "tts")
+            credentials = load_credentials(self.settings, config.provider)
+            missing = missing_credentials("tts", config.provider, credentials)
+            if missing:
+                self._finish(job_id, error=f"请先在 .env 中设置 {'、'.join(missing)}")
+                return
+            text = voices.preview_text(character, book.ai_units, book.language)
+            name = voices.preferred_name(character)
+            book_id = book.id
+
+        try:
+            designed = providers.design_voice(
+                config, credentials, prompt=prompt, preview_text=text, name=name
+            )
+        except ProviderError as e:
+            logger.warning("音色设计失败 character=%s: %s", character_id, e)
+            self._finish(job_id, error=str(e))
+            return
+        except Exception as e:
+            logger.exception("音色设计出现异常 character=%s", character_id)
+            self._finish(job_id, error=f"音色设计失败：{e}")
+            return
+
+        with self.session_factory() as db:
+            character = db.get(Character, character_id)
+            if character is None:
+                self._finish(job_id, error="角色已被删除")
+                return
+            # 同一"服务商 + 合成模型"只保留一个音色：新音色换新记录（试听地址随之变化）
+            old = db.scalar(
+                select(CharacterVoice).where(
+                    CharacterVoice.character_id == character_id,
+                    CharacterVoice.provider == config.provider,
+                    CharacterVoice.tts_model == config.model,
+                )
+            )
+            if old is not None:
+                storage.ai_voice_path(self.settings, book_id, old.id).unlink(missing_ok=True)
+                db.delete(old)
+                db.flush()
+            voice = CharacterVoice(
+                character_id=character_id,
+                provider=config.provider,
+                tts_model=config.model,
+                voice_id=designed.voice_id,
+                voice_prompt_used=prompt,
+            )
+            db.add(voice)
+            db.flush()
+            path = storage.ai_voice_path(self.settings, book_id, voice.id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(designed.preview_wav)
+            db.commit()
+
+        self._finish(job_id)
+        logger.info("音色设计完成 character=%s voice=%s", character_id, designed.voice_id)
+
+    # ---------- 单元朗读 ----------
+
+    def synthesize_unit(self, job_id: int, unit_id: str) -> None:
+        """逐行用说话人的音色合成，行间停顿后拼成一段 .m4a（docs/06 第 6.4 节）。"""
+        logger.info("开始生成朗读 unit=%s", unit_id)
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is None:
+                self._finish(job_id, error="单元已被删除")
+                return
+            if not unit.audio_enabled:
+                # 排队期间开页关闭了朗读（D95）：不生成，保留原来的朗读
+                unit.audio_status = "ready" if unit.audio_source_hash else "none"
+                db.commit()
+                self._finish(job_id)
+                return
+            book = db.get(Book, unit.book_id)
+            assert book is not None  # 单元随绘本级联删除
+            config = load_active_config(db, "tts")
+            credentials = load_credentials(self.settings, config.provider)
+            missing = missing_credentials("tts", config.provider, credentials)
+            try:
+                if missing:
+                    raise speech.SpeechError(f"请先在 .env 中设置 {'、'.join(missing)}")
+                lines = speech.resolve_lines(unit, book.characters, config)
+                speech.check_lines(lines)
+            except speech.SpeechError as e:
+                self._fail_audio(job_id, unit_id, str(e))
+                return
+            unit.audio_status = "running"
+            unit.audio_error = None
+            db.commit()
+            book_id = book.id
+
+        try:
+            segments = []
+            for i, line in enumerate(lines, start=1):
+                assert line.voice_id is not None  # check_lines 已确认
+                data = providers.synthesize(
+                    config, credentials, text=line.text, voice=line.voice_id
+                )
+                try:
+                    segments.append(audio.decode_to_pcm(data))
+                except audio.AudioDecodeError as e:
+                    raise ProviderError(f"第 {i} 行的合成音频无法解码") from e
+            pcm = audio.join_lines(segments)
+        except ProviderError as e:
+            logger.warning("朗读生成失败 unit=%s: %s", unit_id, e)
+            self._fail_audio(job_id, unit_id, str(e))
+            return
+        except Exception as e:
+            logger.exception("朗读生成出现异常 unit=%s", unit_id)
+            self._fail_audio(job_id, unit_id, f"朗读生成失败：{e}")
+            return
+
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is None:
+                self._finish(job_id, error="单元已被删除")
+                return
+            audio.write_m4a(pcm, storage.ai_audio_path(self.settings, book_id, unit_id))
+            unit.audio_status = "ready"
+            unit.audio_error = None
+            # 记录生成时用的台词和音色；之后草稿或音色改了，就显示"需要重新生成"
+            unit.audio_source_hash = speech.source_hash(lines, config)
+            unit.audio_duration_ms = audio.duration_ms(pcm)
+            unit.audio_version += 1
+            db.commit()
+
+        self._finish(job_id)
+        logger.info("朗读生成完成 unit=%s，共 %d 行", unit_id, len(lines))
+
+    def _fail_audio(self, job_id: int, unit_id: str, message: str) -> None:
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is not None:
+                unit.audio_status = "failed"
+                unit.audio_error = message
+                db.commit()
+        self._finish(job_id, error=message)

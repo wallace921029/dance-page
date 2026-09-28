@@ -1,6 +1,6 @@
 """各服务商的适配器（docs/06-ai-tech-design.md 第 1、2 节）。
 
-A1 阶段只实现连接测试；分析、音色、合成、视频在后续里程碑按同样的方式加到各适配器里。
+连接测试、列模型、设计音色、朗读合成经由这里分派到各家适配器；视频在 A4 按同样的方式加进来。
 """
 
 from dataclasses import dataclass
@@ -72,5 +72,44 @@ def list_models(config: CapabilityConfig, credentials: dict[str, str]) -> list[M
     try:
         with http_client() as client:
             return _adapter(config.provider).list_models(client, config, credentials)
+    except httpx.HTTPError as e:
+        raise ProviderError(_network_error(e)) from e
+
+
+@dataclass
+class DesignedVoice:
+    # 服务商返回的音色 ID，合成时用它指定音色
+    voice_id: str
+    # 试听音频（WAV）
+    preview_wav: bytes
+
+
+def design_voice(
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    prompt: str,
+    preview_text: str,
+    name: str,
+) -> DesignedVoice:
+    """按音色提示词为当前朗读模型设计一个音色（docs/06 第 6.3 节）。"""
+    try:
+        with http_client() as client:
+            return _adapter(config.provider).design_voice(
+                client, config, credentials, prompt=prompt, preview_text=preview_text, name=name
+            )
+    except httpx.HTTPError as e:
+        raise ProviderError(_network_error(e)) from e
+
+
+def synthesize(
+    config: CapabilityConfig, credentials: dict[str, str], *, text: str, voice: str
+) -> bytes:
+    """用指定音色合成一句台词，返回音频文件内容（格式由服务商决定，之后统一解码）。"""
+    try:
+        with http_client() as client:
+            return _adapter(config.provider).synthesize(
+                client, config, credentials, text=text, voice=voice
+            )
     except httpx.HTTPError as e:
         raise ProviderError(_network_error(e)) from e

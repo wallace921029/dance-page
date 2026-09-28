@@ -1,10 +1,11 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.book_schemas import AiUnitOut, LineItem, SpreadOut
+from app.ai.speech import audio_outdated
 from app.books.storage import delete_ai_unit_files
 from app.config import Settings
 from app.models import AiUnit, Book
@@ -53,7 +54,14 @@ def calculate_spread_layout(
     return layout
 
 
-def unit_to_out(unit: AiUnit) -> AiUnitOut:
+def unit_audio_url(unit: AiUnit) -> str | None:
+    if unit.audio_source_hash is None:
+        return None
+    return f"/api/admin/ai/units/{unit.id}/audio?v={unit.audio_version}"
+
+
+def unit_to_out(unit: AiUnit, current_audio_hash: str | None = None) -> AiUnitOut:
+    """current_audio_hash：按当前台词和音色算出的指纹，用来判断朗读是否需要重新生成。"""
     return AiUnitOut(
         id=unit.id,
         book_id=unit.book_id,
@@ -61,6 +69,8 @@ def unit_to_out(unit: AiUnit) -> AiUnitOut:
         page_count=unit.page_count,
         lines=[LineItem(**line) for line in (unit.lines or [])],
         motion_prompt=unit.motion_prompt,
+        audio_enabled=unit.audio_enabled,
+        video_enabled=unit.video_enabled,
         audio_status=unit.audio_status,
         video_status=unit.video_status,
         audio_error=unit.audio_error,
@@ -74,11 +84,31 @@ def unit_to_out(unit: AiUnit) -> AiUnitOut:
         video_version=unit.video_version,
         created_at=unit.created_at,
         updated_at=unit.updated_at,
+        audio_url=unit_audio_url(unit),
+        audio_outdated=audio_outdated(unit, current_audio_hash),
     )
 
 
-def build_spreads_out(book: Book, units: Sequence[AiUnit]) -> list[SpreadOut]:
-    """把绘本和它的 AiUnits 组装为前端所需的开页列表。"""
+def build_spreads_out(
+    book: Book, units: Sequence[AiUnit], audio_hashes: Mapping[str, str | None] | None = None
+) -> list[SpreadOut]:
+    """把绘本和它的 AiUnits 组装为前端所需的开页列表。audio_hashes：单元 ID → 当前朗读指纹。"""
+    hashes = audio_hashes or {}
+
+    def out(unit: AiUnit) -> AiUnitOut:
+        return unit_to_out(unit, hashes.get(unit.id))
+
+    def spread(item: SpreadLayoutItem, mode: str, spread_units: list[AiUnitOut]) -> SpreadOut:
+        return SpreadOut(
+            index=item.index,
+            left_page_index=item.left_page_index,
+            right_page_index=item.right_page_index,
+            mode=mode,  # type: ignore[arg-type]
+            audio_enabled=all(u.audio_enabled for u in spread_units),
+            video_enabled=all(u.video_enabled for u in spread_units),
+            units=spread_units,
+        )
+
     layout = calculate_spread_layout(book.page_count, book.orientation, book.spread_start_page)
     unit_map: dict[int, AiUnit] = {u.first_page_index: u for u in units}
 
@@ -91,43 +121,16 @@ def build_spreads_out(book: Book, units: Sequence[AiUnit]) -> list[SpreadOut]:
             # 单页开页
             single_p = right_p if left_p is None else left_p
             unit = unit_map.get(single_p)
-            spread_units = [unit_to_out(unit)] if unit is not None else []
-            spreads.append(
-                SpreadOut(
-                    index=item.index,
-                    left_page_index=left_p,
-                    right_page_index=right_p,
-                    mode="single",
-                    units=spread_units,
-                )
-            )
+            spreads.append(spread(item, "single", [out(unit)] if unit is not None else []))
         else:
             # 双页对开
             left_unit = unit_map.get(left_p)
             if left_unit is not None and left_unit.page_count == 2:
-                spreads.append(
-                    SpreadOut(
-                        index=item.index,
-                        left_page_index=left_p,
-                        right_page_index=right_p,
-                        mode="merged",
-                        units=[unit_to_out(left_unit)],
-                    )
-                )
+                spreads.append(spread(item, "merged", [out(left_unit)]))
             else:
                 right_unit = unit_map.get(right_p)
-                spread_units = [
-                    unit_to_out(u) for u in (left_unit, right_unit) if u is not None
-                ]
-                spreads.append(
-                    SpreadOut(
-                        index=item.index,
-                        left_page_index=left_p,
-                        right_page_index=right_p,
-                        mode="separate",
-                        units=spread_units,
-                    )
-                )
+                spread_units = [out(u) for u in (left_unit, right_unit) if u is not None]
+                spreads.append(spread(item, "separate", spread_units))
 
     return spreads
 
@@ -173,8 +176,14 @@ def change_spread_mode(
         ]
         combined_prompt = "；".join(prompts) if prompts else None
 
+        existing = [u for u in (u_left, u_right) if u is not None]
+        audio_enabled = all(u.audio_enabled for u in existing)
+        video_enabled = all(u.video_enabled for u in existing)
+
         if u_left:
             delete_ai_unit_files(settings, book.id, u_left.id)
+            u_left.audio_enabled = audio_enabled
+            u_left.video_enabled = video_enabled
             u_left.page_count = 2
             u_left.lines = combined_lines
             u_left.motion_prompt = combined_prompt
@@ -191,6 +200,8 @@ def change_spread_mode(
                 page_count=2,
                 lines=combined_lines,
                 motion_prompt=combined_prompt,
+                audio_enabled=audio_enabled,
+                video_enabled=video_enabled,
             )
             db.add(u_left)
 
@@ -218,12 +229,15 @@ def change_spread_mode(
                 )
             )
             if not u_right:
+                # 拆开后右页沿用原来开页的开关
                 u_right = AiUnit(
                     book_id=book.id,
                     first_page_index=second_page,
                     page_count=1,
                     lines=[],
                     motion_prompt=None,
+                    audio_enabled=u_merged.audio_enabled,
+                    video_enabled=u_merged.video_enabled,
                 )
                 db.add(u_right)
         else:
@@ -258,4 +272,26 @@ def change_spread_mode(
     db.refresh(book)
     return next(
         s for s in build_spreads_out(book, book.ai_units) if s.left_page_index == first_page
+    )
+
+
+def find_spread(book: Book, first_page: int) -> SpreadLayoutItem | None:
+    """按开页的第一页（左页，没有左页时为右页）找开页。"""
+    layout = calculate_spread_layout(book.page_count, book.orientation, book.spread_start_page)
+    return next(
+        (
+            s
+            for s in layout
+            if (s.left_page_index if s.left_page_index is not None else s.right_page_index)
+            == first_page
+        ),
+        None,
+    )
+
+
+def units_in_spread(book: Book, spread: SpreadLayoutItem) -> list[AiUnit]:
+    pages = {spread.left_page_index, spread.right_page_index} - {None}
+    return sorted(
+        (u for u in book.ai_units if u.first_page_index in pages),
+        key=lambda u: u.first_page_index,
     )
