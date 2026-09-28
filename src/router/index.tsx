@@ -22,6 +22,16 @@ export const router = createBrowserRouter([
     HydrateFallback: () => null,
   },
   {
+    // 我的收藏（D55）：与书架同一个页面
+    path: "/favorites",
+    loader: requireUser,
+    lazy: () =>
+      import("@/pages/stage/shelf").then((m) => ({
+        Component: () => <m.default mode="favorites" />,
+      })),
+    HydrateFallback: () => null,
+  },
+  {
     path: "/books/:id",
     loader: requireUser,
     lazy: () => import("@/pages/stage/reader").then((m) => ({ Component: m.default })),

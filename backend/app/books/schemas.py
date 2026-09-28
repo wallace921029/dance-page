@@ -31,21 +31,34 @@ def _pages(book: Book) -> list[PageOut]:
 # ---------- 阅读端 ----------
 
 
+DEFAULT_COVER_ASPECT = 3 / 4
+
+
 class ShelfBookOut(BaseModel):
     id: str
     title: str
     orientation: Orientation
     page_count: int
     cover_url: str
+    # 封面宽高比：书架据此在图片加载前就排好封面框，收藏按钮贴在封面左上角
+    cover_aspect: float
+    # 当前用户是否收藏（D55）
+    is_favorite: bool
+    favorited_at: datetime | None
 
     @classmethod
-    def of(cls, book: Book) -> "ShelfBookOut":
+    def of(
+        cls, book: Book, *, cover_aspect: float | None, favorited_at: datetime | None
+    ) -> "ShelfBookOut":
         return cls(
             id=book.id,
             title=book.title,
             orientation=book.orientation,
             page_count=book.page_count,
             cover_url=cover_url(book),
+            cover_aspect=cover_aspect or DEFAULT_COVER_ASPECT,
+            is_favorite=favorited_at is not None,
+            favorited_at=favorited_at,
         )
 
 
@@ -56,9 +69,14 @@ class ReaderBookOut(ShelfBookOut):
     pages: list[PageOut]
 
     @classmethod
-    def of(cls, book: Book) -> "ReaderBookOut":
+    def of(cls, book: Book, *, favorited_at: datetime | None) -> "ReaderBookOut":
+        cover = next((p for p in book.pages if p.page_index == book.cover_page_index), None)
         return cls(
-            **ShelfBookOut.of(book).model_dump(),
+            **ShelfBookOut.of(
+                book,
+                cover_aspect=cover.width / cover.height if cover else None,
+                favorited_at=favorited_at,
+            ).model_dump(),
             language=book.language,
             spread_start_page=book.spread_start_page,
             pages=_pages(book),

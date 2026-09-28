@@ -2,6 +2,7 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { PageFlip } from "page-flip";
 import type { BookPage, Orientation, SpreadStartPage } from "@/api/types";
+import { BOOK_PADDING, computeBookLayout } from "@/pages/stage/reader-layout";
 
 // 只给当前页前后这么多页设置图片地址，其余页释放图片以节省平板内存（封面始终保留，合上书时要用）
 const LOAD_WINDOW = 4;
@@ -21,10 +22,10 @@ type FlipBookProps = {
   spreadStartPage: SpreadStartPage;
   /** 舞台背景，舞台页里会画一块与它对齐的背景 */
   background: string;
-  /** 书四周留出的空间（放按钮和页码） */
-  padding: { top: number; bottom: number; x: number };
   /** 当前可见的页码（从 0 开始） */
   onVisibleChange: (pages: number[]) => void;
+  /** 首次排版完成且封面图片加载好时调用一次 */
+  onReady?: () => void;
   ref?: React.Ref<FlipBookHandle>;
 };
 
@@ -75,8 +76,8 @@ export function FlipBook({
   orientation,
   spreadStartPage,
   background,
-  padding,
   onVisibleChange,
+  onReady,
   ref,
 }: FlipBookProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -86,18 +87,16 @@ export function FlipBook({
   const coverIndexRef = useRef(0);
   // 回调放进 ref，避免父组件每次渲染传入新函数时重建整个翻页组件
   const onVisibleChangeRef = useRef(onVisibleChange);
+  const onReadyRef = useRef(onReady);
   useLayoutEffect(() => {
     onVisibleChangeRef.current = onVisibleChange;
+    onReadyRef.current = onReady;
   });
+  const readyFiredRef = useRef(false);
   const { width, height } = useElementSize(hostRef);
 
-  // 排版规则（02-reader）：竖版书在横屏时对开，其余情况单页
-  const isDouble = orientation === "portrait" && width > height;
   const ratio = pages[0].width / pages[0].height;
-  const availWidth = width - padding.x * 2;
-  const availHeight = height - padding.top - padding.bottom;
-  const pageWidth = Math.floor(Math.min(availWidth / (isDouble ? 2 : 1), availHeight * ratio));
-  const pageHeight = Math.round(pageWidth / ratio);
+  const { isDouble, pageWidth, pageHeight } = computeBookLayout(width, height, ratio, orientation);
 
   useImperativeHandle(ref, () => ({
     flipNext: () => flipRef.current?.flipNext(),
@@ -164,6 +163,19 @@ export function FlipBook({
     const startPage = found === -1 ? 0 : found;
     loadAround(startPage);
 
+    // 封面图片加载好后通知一次（书架的"翻开进入阅读"过渡要等封面出现再撤掉）
+    const coverImage = images[coverIndex];
+    const fireReady = () => {
+      if (readyFiredRef.current) return;
+      readyFiredRef.current = true;
+      onReadyRef.current?.();
+    };
+    if (!coverImage || coverImage.complete) requestAnimationFrame(fireReady);
+    else {
+      coverImage.addEventListener("load", fireReady, { once: true });
+      coverImage.addEventListener("error", fireReady, { once: true });
+    }
+
     // page-flip 在根元素宽度 < minWidth * 2 时切成单页模式；
     // 这里 minWidth = maxWidth = 页宽，由根元素宽度（1 倍或 2 倍页宽）决定单页还是对开
     const pageFlip = new PageFlip(block, {
@@ -221,7 +233,7 @@ export function FlipBook({
     <div
       ref={hostRef}
       className="absolute inset-0 flex items-center justify-center"
-      style={{ padding: `${padding.top}px ${padding.x}px ${padding.bottom}px` }}
+      style={{ padding: `${BOOK_PADDING.top}px ${BOOK_PADDING.x}px ${BOOK_PADDING.bottom}px` }}
     />
   );
 }

@@ -141,3 +141,17 @@ class Job(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     book: Mapped[Book] = relationship(back_populates="jobs")
+
+
+class Favorite(Base):
+    """读者收藏的绘本（D55）。按账号保存，换设备登录后仍在。"""
+
+    __tablename__ = "favorites"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    book_id: Mapped[str] = mapped_column(
+        ForeignKey("books.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

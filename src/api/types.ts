@@ -85,6 +85,10 @@ export interface ShelfBook {
   orientation: Orientation;
   page_count: number;
   cover_url: string;
+  /** 封面宽高比，图片加载前就能排好封面框 */
+  cover_aspect: number;
+  is_favorite: boolean;
+  favorited_at: string | null;
 }
 
 export interface ReaderBook extends ShelfBook {

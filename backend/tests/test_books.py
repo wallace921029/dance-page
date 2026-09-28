@@ -1,40 +1,10 @@
-import io
-
 import pytest
 from sqlalchemy import select, update
 
 from app.books import storage
 from app.models import Job
 from app.worker import runner
-from app.worker.runner import Worker
-from tests.pdfs import picture_book_pages, write_pdf
-
-FILENAME = "波西和皮普 大怪兽 (（德）阿克塞尔·舍夫勒著绘) (z-library.sk).pdf"
-
-
-@pytest.fixture
-def worker(app, settings) -> Worker:
-    return Worker(settings, app.state.session_factory)
-
-
-@pytest.fixture
-def pdf_bytes(tmp_path) -> bytes:
-    return write_pdf(tmp_path / "book.pdf", picture_book_pages(spreads=2)).read_bytes()
-
-
-def upload(admin, content: bytes, filename: str = FILENAME):
-    return admin.post(
-        "/api/admin/books", files={"file": (filename, io.BytesIO(content), "application/pdf")}
-    )
-
-
-@pytest.fixture
-def ready_book(admin, worker, pdf_bytes) -> dict:
-    """上传并处理完成的一本书。"""
-    book = upload(admin, pdf_bytes).json()
-    assert worker.run_once()
-    return admin.get(f"/api/admin/books/{book['id']}").json()
-
+from tests.conftest import FILENAME, upload
 
 # ---------- 上传与拆页 ----------
 

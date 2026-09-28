@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Link } from "react-router";
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Link, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ImageOff, Upload } from "lucide-react";
 import { adminBookKeys, uploadBook, useAdminBooks } from "@/api/books";
@@ -14,6 +14,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -34,8 +43,16 @@ import { PageHeader } from "@/pages/admin/layout";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 const MAX_UPLOAD_MB = 200;
+const PAGE_SIZE = 10;
 
 type UploadTask = { id: number; name: string; progress: number };
+
+function searchParamsForPage(searchParams: URLSearchParams, page: number) {
+  const params = new URLSearchParams(searchParams);
+  if (page === 1) params.delete("page");
+  else params.set("page", String(page));
+  return params;
+}
 
 export default function AdminBooksPage() {
   const { data: books, isPending, error } = useAdminBooks();
@@ -43,6 +60,40 @@ export default function AdminBooksPage() {
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploads, setUploads] = useState<UploadTask[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pageParam = searchParams.get("page");
+  const parsedPage = Number(pageParam);
+  const requestedPage =
+    pageParam !== null && Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const pageCount = Math.max(1, Math.ceil((books?.length ?? 0) / PAGE_SIZE));
+  const page = Math.min(requestedPage, pageCount);
+  const pageBooks = books?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageNumbers =
+    pageCount <= 7
+      ? Array.from({ length: pageCount }, (_, i) => i + 1)
+      : [...new Set([1, page - 1, page, page + 1, pageCount])]
+          .filter((number) => number >= 1 && number <= pageCount)
+          .sort((a, b) => a - b);
+
+  useEffect(() => {
+    if (books && pageParam !== null && pageParam !== (page === 1 ? "1" : String(page))) {
+      setSearchParams((current) => searchParamsForPage(current, page), { replace: true });
+    }
+  }, [books, pageParam, page, setSearchParams]);
+
+  const pageHref = (target: number) => {
+    const params = searchParamsForPage(searchParams, target).toString();
+    return `/admin/books${params ? `?${params}` : ""}`;
+  };
+  const changePage = (target: number) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (target < 1 || target > pageCount) {
+      event.preventDefault();
+      return;
+    }
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setSearchParams((current) => searchParamsForPage(current, target));
+  };
 
   // 多个文件依次上传，避免同时占满带宽
   const uploadFiles = async (files: File[]) => {
@@ -63,6 +114,7 @@ export default function AdminBooksPage() {
       setUploads((current) => current.filter((t) => t.id !== task.id));
       if ("book" in result) {
         toast.add({ title: `《${result.book.title}》上传完成，正在处理`, type: "success" });
+        setSearchParams((current) => searchParamsForPage(current, 1));
         queryClient.invalidateQueries({ queryKey: adminBookKeys.all, exact: true });
       } else {
         toast.add({ title: `${file.name} 上传失败`, description: result.error, type: "error" });
@@ -135,11 +187,64 @@ export default function AdminBooksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {books.map((book) => (
+              {pageBooks?.map((book) => (
                 <BookRow key={book.id} book={book} />
               ))}
             </TableBody>
           </Table>
+          {pageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, books.length)} 条，共{" "}
+                {books.length} 本
+              </span>
+              <Pagination aria-label="绘本列表分页" className="mx-0 w-auto max-w-full overflow-x-auto">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href={page > 1 ? pageHref(page - 1) : undefined}
+                      onClick={changePage(page - 1)}
+                      aria-label="上一页"
+                      aria-disabled={page === 1}
+                      tabIndex={page === 1 ? -1 : undefined}
+                      className={page === 1 ? "pointer-events-none opacity-50" : undefined}
+                      text="上一页"
+                    />
+                  </PaginationItem>
+                  {pageNumbers.map((number, index) => (
+                    <Fragment key={number}>
+                      {index > 0 && number > pageNumbers[index - 1] + 1 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink
+                          href={pageHref(number)}
+                          onClick={changePage(number)}
+                          isActive={number === page}
+                          aria-label={`第 ${number} 页`}
+                        >
+                          {number}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </Fragment>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      href={page < pageCount ? pageHref(page + 1) : undefined}
+                      onClick={changePage(page + 1)}
+                      aria-label="下一页"
+                      aria-disabled={page === pageCount}
+                      tabIndex={page === pageCount ? -1 : undefined}
+                      className={page === pageCount ? "pointer-events-none opacity-50" : undefined}
+                      text="下一页"
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </Card>
       )}
     </>

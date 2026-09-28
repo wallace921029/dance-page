@@ -1,3 +1,4 @@
+import io
 from collections.abc import Callable, Iterator
 from datetime import timedelta
 
@@ -8,6 +9,8 @@ from fastapi.testclient import TestClient
 from app import clock
 from app.config import Settings
 from app.main import create_app
+from app.worker.runner import Worker
+from tests.pdfs import picture_book_pages, write_pdf
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin-pass"
@@ -86,3 +89,32 @@ def reader(admin, new_client) -> TestClient:
     res = register(c, create_invite(admin)["code"], "xiaoming")
     assert res.status_code == 201, res.text
     return c
+
+
+# ---------- 绘本 ----------
+
+FILENAME = "波西和皮普 大怪兽 (（德）阿克塞尔·舍夫勒著绘) (z-library.sk).pdf"
+
+
+@pytest.fixture
+def worker(app, settings) -> Worker:
+    return Worker(settings, app.state.session_factory)
+
+
+@pytest.fixture
+def pdf_bytes(tmp_path) -> bytes:
+    return write_pdf(tmp_path / "book.pdf", picture_book_pages(spreads=2)).read_bytes()
+
+
+def upload(admin: TestClient, content: bytes, filename: str = FILENAME):
+    return admin.post(
+        "/api/admin/books", files={"file": (filename, io.BytesIO(content), "application/pdf")}
+    )
+
+
+@pytest.fixture
+def ready_book(admin, worker, pdf_bytes) -> dict:
+    """上传并处理完成的一本书。"""
+    book = upload(admin, pdf_bytes).json()
+    assert worker.run_once()
+    return admin.get(f"/api/admin/books/{book['id']}").json()

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ArrowLeft, BookOpen, Maximize, Minimize } from "lucide-react";
 import { useReaderBook } from "@/api/shelf";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,24 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import { getErrorMessage } from "@/lib/api";
 import { READER_BACKGROUND, StageRoundButton, stageSubmitButtonClass } from "@/pages/stage/common";
+import { finishBookOpening } from "@/pages/stage/book-opening";
 import { FlipBook, type FlipBookHandle } from "@/pages/stage/flip-book";
 
-// 书四周留出的空间：上方放按钮，下方放页码
-const BOOK_PADDING = { top: 68, bottom: 56, x: 24 };
+/** 从书架"翻开进入阅读"时，过渡层撤掉后等这么久再自动翻开封面 */
+const AUTO_OPEN_DELAY_MS = 300;
 
 export default function ReaderPage() {
   const { id = "" } = useParams();
+  const location = useLocation();
+  // 返回书架时回到打开这本书的地方（首页或我的收藏，含页码和搜索词）
+  const shelfPath: unknown = location.state?.shelfPath;
+  const shelfHref =
+    typeof shelfPath === "string" && shelfPath.startsWith("/") && !shelfPath.startsWith("//")
+      ? shelfPath
+      : "/";
+  const navigate = useNavigate();
+  // 从书架点书进来且开启了书本动效：书架的过渡层还盖在上面（D52）
+  const opening = location.state?.opening === true;
   const { data: book, isPending, error } = useReaderBook(id);
   const flipRef = useRef<FlipBookHandle>(null);
   const [visible, setVisible] = useState<number[]>([0]);
@@ -32,6 +43,20 @@ export default function ReaderPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // 加载失败时也要撤掉书架的过渡层
+  useEffect(() => {
+    if (error) finishBookOpening();
+  }, [error]);
+
+  // 封面已在过渡层下就位：撤掉过渡层，再用真实的翻页动画翻开封面
+  const onReady = () => {
+    if (!opening) return;
+    finishBookOpening();
+    window.setTimeout(() => flipRef.current?.flipNext(), AUTO_OPEN_DELAY_MS);
+    // 去掉 opening 标记，刷新页面时不再自动翻开；保留返回书架用的页码
+    navigate(location.pathname, { replace: true, state: { shelfPath } });
+  };
 
   const onVisibleChange = (pages: number[]) => {
     setVisible(pages);
@@ -53,13 +78,13 @@ export default function ReaderPage() {
           orientation={book.orientation}
           spreadStartPage={book.spread_start_page}
           background={READER_BACKGROUND}
-          padding={BOOK_PADDING}
           onVisibleChange={onVisibleChange}
+          onReady={onReady}
         />
       )}
 
       <div className="absolute top-3 left-4 z-10">
-        <StageRoundButton label="返回书架" nativeButton={false} render={<Link to="/" />}>
+        <StageRoundButton label="返回书架" nativeButton={false} render={<Link to={shelfHref} />}>
           <ArrowLeft />
         </StageRoundButton>
       </div>
@@ -79,7 +104,12 @@ export default function ReaderPage() {
             </EmptyTitle>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant="link" nativeButton={false} render={<Link to="/" />} className="text-stage-light">
+            <Button
+              variant="link"
+              nativeButton={false}
+              render={<Link to={shelfHref} />}
+              className="text-stage-light"
+            >
               回到书架
             </Button>
           </EmptyContent>

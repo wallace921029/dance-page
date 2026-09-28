@@ -2,13 +2,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import and_, delete, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.books import storage
 from app.books.schemas import ReaderBookOut, ShelfBookOut
 from app.deps import AppSettings, CurrentUser, DbSession
-from app.models import Book, User
+from app.models import Book, Favorite, Page, User
 
 router = APIRouter(prefix="/books", tags=["阅读端"])
 
@@ -38,18 +39,50 @@ def _image_response(path: Path) -> FileResponse:
 
 
 @router.get("")
-def list_shelf(_user: CurrentUser, db: DbSession) -> list[ShelfBookOut]:
-    books = db.scalars(
-        select(Book)
+def list_shelf(user: CurrentUser, db: DbSession) -> list[ShelfBookOut]:
+    cover = aliased(Page)
+    rows = db.execute(
+        select(Book, Favorite.created_at, cover.width, cover.height)
+        .outerjoin(Favorite, and_(Favorite.book_id == Book.id, Favorite.user_id == user.id))
+        .outerjoin(cover, and_(cover.book_id == Book.id, cover.page_index == Book.cover_page_index))
         .where(Book.visibility == "listed", Book.processing_status == "ready")
         .order_by(Book.created_at.desc())
     )
-    return [ShelfBookOut.of(b) for b in books]
+    return [
+        ShelfBookOut.of(
+            book,
+            cover_aspect=width / height if width and height else None,
+            favorited_at=favorited_at,
+        )
+        for book, favorited_at, width, height in rows
+    ]
 
 
 @router.get("/{book_id}")
 def get_book(book_id: str, user: CurrentUser, db: DbSession) -> ReaderBookOut:
-    return ReaderBookOut.of(_readable_book(db, book_id, user, with_pages=True))
+    book = _readable_book(db, book_id, user, with_pages=True)
+    favorite = db.get(Favorite, (user.id, book.id))
+    return ReaderBookOut.of(book, favorited_at=favorite.created_at if favorite else None)
+
+
+@router.put("/{book_id}/favorite", status_code=status.HTTP_204_NO_CONTENT)
+def add_favorite(book_id: str, user: CurrentUser, db: DbSession) -> None:
+    """收藏（重复调用无副作用）。只能收藏自己能看到的绘本。"""
+    _readable_book(db, book_id, user)
+    if db.get(Favorite, (user.id, book_id)) is not None:
+        return
+    db.add(Favorite(user_id=user.id, book_id=book_id))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 并发的重复请求已经收藏过了
+
+
+@router.delete("/{book_id}/favorite", status_code=status.HTTP_204_NO_CONTENT)
+def remove_favorite(book_id: str, user: CurrentUser, db: DbSession) -> None:
+    """取消收藏（重复调用无副作用）。绘本已下架时也可以取消。"""
+    db.execute(delete(Favorite).where(Favorite.user_id == user.id, Favorite.book_id == book_id))
+    db.commit()
 
 
 @router.get("/{book_id}/cover", response_class=FileResponse)

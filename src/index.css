@@ -17,6 +17,14 @@
     --font-stage-title: "ZCOOL XiaoWei", "Noto Sans SC Variable", serif;
     --font-stage: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
     --animate-firefly: firefly 7s ease-in-out infinite alternate; /* 书架上的萤火虫 */
+    --animate-shelf-hop: shelf-hop 0.62s cubic-bezier(0.3, 0.7, 0.4, 1) both; /* 书依次跳上书架 */
+}
+
+@keyframes shelf-hop {
+    0% { transform: translateY(55%) scale(0.8); opacity: 0; }
+    60% { transform: translateY(-7%) scale(1.03); opacity: 1; }
+    80% { transform: translateY(2%) scale(0.99); }
+    100% { transform: none; opacity: 1; }
 }
 
 @keyframes firefly {

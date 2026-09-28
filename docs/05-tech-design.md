@@ -105,6 +105,9 @@ jobs
   status ('queued' | 'running' | 'done' | 'failed'),
   progress_done, progress_total, error, attempts,
   created_at, started_at, finished_at
+
+favorites（D55）
+  user_id, book_id（联合主键；删除用户或绘本时级联删除）, created_at
 ```
 
 - 阅读端书架只返回 `visibility = listed` 且 `processing_status = ready` 的绘本。
@@ -161,6 +164,10 @@ DATA_DIR/
 | GET | `/api/books/{id}` | 绘本信息（含对开配对 `spread_start_page`）+ 页面列表（每页的宽高和图片地址） |
 | GET | `/api/books/{id}/cover` | 小封面图片 |
 | GET | `/api/books/{id}/pages/{index}` | 页面图片 |
+| PUT | `/api/books/{id}/favorite` | 收藏（重复调用无副作用；只能收藏自己能看到的绘本） |
+| DELETE | `/api/books/{id}/favorite` | 取消收藏（重复调用无副作用；绘本已下架也可以取消） |
+
+书架列表和绘本详情会带上 `is_favorite`、`favorited_at`（当前用户），以及 `cover_aspect`（封面宽高比，书架在图片加载前就能排好封面框，收藏按钮贴在封面左上角）。搜索在前端按书名筛选，不需要接口。
 
 图片接口先校验登录，再由 FastAPI 返回文件，并带长期缓存头（`Cache-Control: private`）。图片地址带版本参数，更换封面或重新渲染后地址变化，缓存自动失效。
 

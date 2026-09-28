@@ -24,6 +24,8 @@ export interface ShelfTheme {
   lightPool?: boolean;
   /** 绘本立在木书架上 */
   plank?: boolean;
+  /** 偶尔有萤火虫飞来停在书上（D48） */
+  fireflies?: boolean;
 }
 
 const STARS = [
@@ -51,6 +53,7 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     avatar: "bg-white/12 text-stage-light",
     cover: "ring-2 ring-[rgba(255,238,196,.55)] shadow-[0_0_28px_rgba(255,214,140,.22)]",
     lightPool: true,
+    fireflies: true,
   },
   sunny: {
     id: "sunny",
@@ -74,6 +77,7 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     caption: "text-[#FFF2D6] [text-shadow:0_1px_4px_rgba(40,30,70,.55)]",
     avatar: "bg-white/20 text-[#FFF2D6]",
     cover: "ring-2 ring-[rgba(255,248,230,.6)] shadow-[0_12px_28px_rgba(40,30,70,.35)]",
+    fireflies: true,
   },
   garden: {
     id: "garden",
