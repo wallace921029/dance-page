@@ -13,3 +13,4 @@
 | [open-questions.md](./open-questions.md) | 待讨论 / 待决策事项 |
 | [decision-log.md](./decision-log.md) | 已做出的关键决策及理由 |
 | [design/reader-style-options.html](./design/reader-style-options.html) | 阅读端四个视觉风格方向的对比页（已选 B 小剧场） |
+| [design/shelf-style-options.html](./design/shelf-style-options.html) | 书架页四个主题方向的对比页（四套均已实现，可切换） |

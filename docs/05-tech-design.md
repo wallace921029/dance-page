@@ -1,6 +1,6 @@
 # 技术设计（第一期）
 
-> 状态：初稿，待确认 · 最后更新 2026-09-28
+> 状态：已确认 · 最后更新 2026-09-28
 
 本文把 [第一期 MVP 范围](./04-mvp-scope.md) 落到技术方案上，同时为 AI 阶段预留扩展位置。产品规则以 01–04 文档为准，本文只讲"怎么做"。
 
@@ -8,11 +8,11 @@
 
 ```
 平板 / 电脑浏览器
-   │  HTTPS
+   │
    ▼
-Caddy（自动 HTTPS 证书）
+Nginx（用户自行配置，含域名 / HTTPS）
    ├── /          → 前端静态文件（Vite 构建产物，React SPA）
-   └── /api/*     → FastAPI（uvicorn）
+   └── /api/*     → FastAPI（uvicorn，127.0.0.1:8000）
                         │
                         ├── SQLite（app.db，WAL 模式）
                         └── 本地磁盘 DATA_DIR（原始 PDF、页面图片）
@@ -26,8 +26,8 @@ Worker 进程（后台任务）──┘  轮询 jobs 表，执行 PDF 拆页；
 | 数据库 | SQLite + SQLAlchemy 2.0 + Alembic | 单服务器、小范围使用，无需单独维护数据库服务；Alembic 管理表结构迁移 |
 | 文件存储 | 服务器本地磁盘 | 512GB 足够，见 [产品概述 - 存储](./01-product-overview.md#存储与图片质量) |
 | 后台任务 | 独立 Worker 进程 + 数据库任务表 | 拆页是 CPU 密集任务，不能拖慢 API；任务记录在库里，服务重启不丢；AI 阶段的长任务直接复用；不需要引入 Redis |
-| 反向代理 | Caddy | 自动申请和续期 HTTPS 证书，配置最少 |
-| 部署 | Docker Compose（caddy / api / worker 三个服务） | 一条命令启动，环境可复现 |
+| 反向代理 | Nginx（用户自行配置） | 用户已有 Nginx 运维经验；域名、HTTPS 均由用户负责（D39） |
+| 部署 | Docker Compose（api / worker 两个服务） | 一条命令启动，环境可复现 |
 
 ## 2. 后端
 
@@ -35,19 +35,24 @@ Worker 进程（后台任务）──┘  轮询 jobs 表，执行 PDF 拆页；
 
 ```
 backend/
-├── pyproject.toml          # uv 管理依赖
+├── pyproject.toml          # uv 管理依赖（Python 3.13）
+├── Dockerfile
 ├── alembic.ini
-├── migrations/             # 数据库迁移
+├── migrations/             # 数据库迁移（API 启动时自动执行 upgrade head）
 ├── app/
-│   ├── main.py             # FastAPI 应用入口，挂载各路由
-│   ├── config.py           # 配置（pydantic-settings，读取环境变量）
-│   ├── db.py               # 数据库连接
+│   ├── main.py             # 应用工厂 create_app()：迁移、同步管理员、挂载路由
+│   ├── config.py           # 配置（pydantic-settings，读取环境变量 / backend/.env）
+│   ├── db.py               # 数据库连接、UTC 时间列类型
+│   ├── clock.py            # 统一取当前时间（测试可快进）
+│   ├── deps.py             # 公共依赖：数据库会话、当前用户、require_user / require_admin
+│   ├── errors.py           # 错误响应统一为 {"detail": "中文提示"}
 │   ├── models.py           # 数据表定义
-│   ├── auth/               # 登录、注册、会话、权限依赖
+│   ├── auth/               # 登录、注册、会话、密码、限流、管理员同步
 │   ├── invites/            # 邀请码
 │   ├── readers/            # 读者管理
-│   ├── books/              # 绘本（管理端 + 阅读端接口）、文件访问
-│   └── worker/             # Worker 主循环、任务定义、PDF 拆页
+│   ├── books/              # 绘本（管理端 + 阅读端接口）、文件访问（M2）
+│   └── worker/             # Worker 主循环、任务定义、PDF 拆页（M2）
+├── scripts/                # 开发用脚本（M0 样本拆页）
 └── tests/                  # pytest
 ```
 
@@ -61,13 +66,17 @@ backend/
 | `DATA_DIR` | 数据目录，存放 `app.db` 和所有绘本文件 |
 | `MAX_UPLOAD_MB` | 上传上限，默认 200 |
 | `APP_SECRET_KEY` | AI 阶段用于加密存储 API Key；第一期可先配置好 |
+| `COOKIE_SECURE` | 会话 Cookie 是否带 `Secure`，默认 `true`；未配置 HTTPS 时设为 `false` |
+| `API_PORT` | 仅 Docker Compose 使用：API 在本机监听的端口，默认 8000 |
+
+部署时写在仓库根目录的 `.env`（模板 `.env.example`），本地开发写在 `backend/.env`（模板 `backend/.env.example`）。
 
 ### 2.3 数据模型
 
 ```
 users
-  id, username (唯一), password_hash, role ('admin' | 'reader'),
-  is_disabled, created_at
+  id, username (唯一，不区分大小写), password_hash, role ('admin' | 'reader'),
+  is_disabled, created_at, last_active_at（登录和会话续期时更新，读者列表显示"最近使用"）
 
 sessions
   id, token_hash (唯一), user_id, created_at, expires_at, last_seen_at
@@ -79,10 +88,13 @@ invite_codes
 
 books
   id (UUID), title, original_filename, file_size,
-  language ('zh' | 'en' | 空), orientation ('portrait' | 'landscape'),
+  language ('zh' | 'en' | 空), orientation ('portrait' | 'landscape'，拆页完成前为空),
   cover_page_index, page_count,
+  spread_start_detected (2 | 3 | 空), spread_start_override (2 | 3 | 空)
+    → 实际配对 = override ?? detected ?? 2（D43）
   visibility ('listed' | 'unlisted'),
   processing_status ('processing' | 'ready' | 'failed'), processing_error,
+  assets_version（页面图或封面变化时加 1，拼进图片地址使缓存失效）,
   created_at, updated_at
 
 pages
@@ -116,11 +128,15 @@ DATA_DIR/
 ### 2.5 账户、会话与权限
 
 - **密码**：argon2id 哈希存储。
-- **会话**：登录后生成随机令牌，写入 Cookie（`HttpOnly`、`Secure`、`SameSite=Lax`），数据库只存令牌的哈希。
+- **会话**：登录后生成随机令牌，写入 Cookie（`HttpOnly`、`SameSite=Lax`；`Secure` 由环境变量 `COOKIE_SECURE` 控制，默认开启，纯 HTTP 访问时需关闭），数据库只存令牌的哈希。
 - **30 天滑动续期**：每次请求检查会话，距上次续期超过 1 天就把过期时间顺延到 30 天后。
 - **禁用读者**：立即删除该读者的所有会话，下一次请求即被登出。
-- **防暴力破解**：登录和注册接口按 IP 和用户名限制失败次数（内存计数即可）。
-- **邀请码格式**：8 位，去掉易混淆字符（0/O、1/I/L），显示为 `K7M3-Q9TX`。注册链接为 `/register?code=K7M3Q9TX`。
+- **重置密码**：同样删除该读者的所有会话，所有设备需用新密码重新登录。
+- **管理员同步**：启动时以环境变量为准，保证只有一个管理员：没有则创建；用户名或密码变化则更新（密码变化时登出管理员的所有设备）；管理员用户名与已有读者冲突时拒绝启动。
+- **防暴力破解**（内存计数，15 分钟窗口）：登录失败每个 IP 20 次、每个用户名 10 次；注册时邀请码错误每个 IP 10 次。超过后返回 429"尝试次数过多，请 N 分钟后再试"。IP 取自 Nginx 的 `X-Forwarded-For`（uvicorn `--proxy-headers`）。
+- **登录错误提示**：用户名不存在和密码错误统一提示"用户名或密码错误"，且耗时相同，无法借此判断用户名是否存在。
+- **用户名 / 密码规则**：见 [阅读端需求 - 账户](./02-reader.md#账户)（D44）。
+- **邀请码格式**：8 位，去掉易混淆字符（0/O、1/I/L），显示为 `K7M3-Q9TX`。注册链接为 `/register?code=K7M3Q9TX`。注册时忽略大小写、空格和 `-`。有效期 1–365 天，默认 7 天。已使用的邀请码不能作废。
 - **权限**：两个 FastAPI 依赖：`require_user`（任意已登录、未禁用的用户，管理员也可以用阅读端预览）和 `require_admin`。
 - **CSRF**：`SameSite=Lax` Cookie，加上非上传接口只接受 JSON 请求体，足以覆盖本项目场景。
 
@@ -142,7 +158,7 @@ DATA_DIR/
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/books` | 书架列表，按上传时间倒序 |
-| GET | `/api/books/{id}` | 绘本信息 + 页面列表（每页的宽高和图片地址） |
+| GET | `/api/books/{id}` | 绘本信息（含对开配对 `spread_start_page`）+ 页面列表（每页的宽高和图片地址） |
 | GET | `/api/books/{id}/cover` | 小封面图片 |
 | GET | `/api/books/{id}/pages/{index}` | 页面图片 |
 
@@ -155,7 +171,7 @@ DATA_DIR/
 | POST | `/api/admin/books` | 上传 PDF（multipart），返回新绘本 |
 | GET | `/api/admin/books` | 全部绘本（含下架、处理中、失败） |
 | GET | `/api/admin/books/{id}` | 绘本详情 + 处理进度 |
-| PATCH | `/api/admin/books/{id}` | 修改书名、语言、版式、封面页、上下架 |
+| PATCH | `/api/admin/books/{id}` | 修改书名、语言、版式、封面页、对开配对、上下架（只改请求中出现的字段；语言、对开配对传 null 表示清空） |
 | DELETE | `/api/admin/books/{id}` | 删除绘本（数据库记录 + 文件目录） |
 | POST | `/api/admin/invites` | 生成邀请码（可指定有效天数，默认 7） |
 | GET | `/api/admin/invites` | 邀请码列表 |
@@ -172,17 +188,21 @@ DATA_DIR/
    → 创建 book（processing）+ 保存 original.pdf + 创建 render_pdf 任务
 2. Worker 领取任务：
    用 pypdfium2 打开 PDF（加密或损坏 → 标记 failed，写入中文错误原因）
-   逐页渲染：长边缩放到 2048px → WebP（质量 80）→ 写入 pages/，更新进度
+   低分辨率扫描全书，求所有页面内容的并集，得到统一的裁白边比例（D42）
+   逐页渲染：裁掉白边、长边缩放到 2048px → WebP（质量 80）→ 写入 pages/，更新进度
    按多数页面的宽高比判断整本书是横版还是竖版
-   用第 0 页生成小封面 cover.webp
+   比较相邻两页接缝处的像素，检测跨页大图的配对方式（D43）
+   用封面页生成小封面 cover.webp
 3. 完成：processing_status = ready，visibility = listed（默认上架）
 ```
 
 - 管理端详情页轮询进度，显示"处理中 12 / 30"。
-- 2048px、质量 80 是初始值，放在配置常量里，用真实绘本实测后再校准。
+- 2048px、质量 80 是初始值（`app/books/render.py` 中的常量）。样本书实测：30 页约 11 秒处理完，单页平均 290KB。
 - Worker 启动时，把上次中断的 `running` 任务重新放回队列。
 - 处理过程中绘本被删除时，Worker 每渲染一页检查一次，发现绘本已删除就终止任务。
 - 更换封面时同步重新生成 `cover.webp`。
+- 上传大小分两道检查：请求头 `Content-Length` 明显超限时直接返回 413；复制文件时再按实际大小检查。
+- 本地开发由 `scripts/dev.sh` 同时启动 Worker（`watchfiles` 监听代码变化自动重启）。
 
 ## 3. 前端
 
@@ -192,23 +212,23 @@ DATA_DIR/
 
 | 路由 | 页面 | 风格 |
 | --- | --- | --- |
-| `/login`、`/register` | 登录、注册（注册页从 `?code=` 读取邀请码） | 小剧场 |
-| `/` | 书架 | 小剧场 |
+| `/login`、`/register` | 登录、注册（注册页从 `?code=` 读取邀请码；两页均在已登录时直接跳走） | 小剧场 |
+| `/` | 书架（平板横屏 3 列，竖屏和手机 2 列，大屏 4 列） | 小剧场 |
 | `/books/:id` | 阅读页 | 小剧场 |
 | `/admin/books`、`/admin/books/:id` | 绘本列表、绘本详情与编辑 | shadcn/ui 工具风 |
 | `/admin/invites`、`/admin/readers` | 邀请码、读者管理 | shadcn/ui 工具风 |
 
 - **路由守卫**：进入页面前请求 `/api/auth/me`，未登录跳转登录页，读者访问 `/admin` 跳回书架。
 - **数据请求**：继续使用现有的 axios 实例，新增 `@tanstack/react-query` 管理缓存、加载状态和进度轮询。
-- **小剧场主题**：在阅读端根元素下定义一套独立的 CSS 变量（配色见 [阅读端需求](./02-reader.md#视觉风格小剧场)），不修改 shadcn 的全局主题，Admin 端不受影响。
-- **字体自托管**：ZCOOL XiaoWei、ZCOOL QingKe HuangYou、Noto Sans SC 通过 `@fontsource` 打包进项目。不使用 Google Fonts CDN，国内访问更稳定。
+- **小剧场主题**：配色（见 [阅读端需求](./02-reader.md#视觉风格小剧场)）和字体注册为 Tailwind 主题色（`src/index.css` 的 `@theme`，如 `bg-stage-night`、`font-stage-title`），只新增、不修改 shadcn 的全局主题，Admin 端不受影响。
+- **字体自托管**：ZCOOL XiaoWei、Noto Sans SC 通过 `@fontsource` 打包进项目（按字符范围拆分，只下载用到的字）；ZCOOL QingKe HuangYou 用于 AI 阶段的"Dance Ready!"招牌，届时再加。不使用 Google Fonts CDN，国内访问更稳定。
 
 ### 3.2 仿真翻页
 
-- **候选库：StPageFlip（`page-flip`，MIT 许可）**。它支持卷页效果、触屏拖拽、封面单独显示、单页 / 双页模式。
-- 该库近几年更新不活跃，因此**开发第一步先做技术验证**（见第 6 节），确认在 iPad Safari 上可用后再正式接入。
+- **采用 StPageFlip（`page-flip`，MIT 许可）的 HTML 模式**，已在桌面浏览器验证并正式接入（`src/pages/stage/flip-book.tsx`）；iPad 真机结论待补充。
+- 该库近几年更新不活跃，接入时绕开了它的几处限制（不用 `showCover`、自行控制单页 / 对开、封面左侧放"舞台页"等），细节见 `docs/progress.md` 的"阅读页实现要点"。
 - 排版规则按 [阅读端需求](./02-reader.md#横竖版排版) 实现：竖版书横屏对开、封面单独一页，其余情况单页。平板旋转时重新计算排版。
-- **预加载**（P1）：当前页前后各 2 页的图片提前加载。
+- **预加载**（P1）：只给当前页前后 4 页设置图片地址（兼作预加载），离得远的页释放图片以节省平板内存；封面始终保留。
 - **全屏**：使用浏览器全屏 API（iPad Safari 需要带 webkit 前缀）；从主屏幕打开时本身就是全屏，隐藏全屏按钮。
 
 ### 3.3 添加到主屏幕（P1）
@@ -219,15 +239,21 @@ DATA_DIR/
 ## 4. 部署
 
 ```
-docker compose
-├── caddy    # 对外 80/443；托管前端构建产物；/api 转发给 api
-├── api      # uvicorn app.main:app（单进程）
+docker compose（仓库根目录 docker-compose.yml；M1 只有 api，worker 在 M2 加入）
+├── api      # uvicorn --factory app.main:create_app（单进程），端口只绑定 127.0.0.1:8000
 └── worker   # python -m app.worker
-共享数据卷：DATA_DIR
+共享数据目录：仓库根目录 ./data → 容器内 /data
+
+用户自行配置的 Nginx
+├── /       → 前端构建产物 dist/（SPA，未命中的路径回退到 index.html）
+└── /api/   → http://127.0.0.1:8000
 ```
 
-- 需要一个指向云服务器的**域名**，Caddy 用它自动申请 HTTPS 证书。
-- Caddy 请求体上限设为 210MB，略高于应用层的 200MB，以便返回清晰的中文错误提示。
+- 域名和 HTTPS 由用户在 Nginx 上自行配置，本项目不处理。
+- 项目提供一份 Nginx 配置参考片段，需要注意：
+  - `client_max_body_size 210m`，略高于应用层的 200MB，以便由后端返回清晰的中文错误提示；
+  - 上传接口适当调大 `proxy_read_timeout` / `proxy_request_buffering`，避免大文件上传超时。
+- 如果不配 HTTPS，需设置 `COOKIE_SECURE=false`，否则浏览器不会保存登录 Cookie。
 - **备份建议**：每天用 SQLite 的在线备份命令导出一份 `app.db`，连同 `books/` 目录同步到另一个位置（对象存储或另一块磁盘）。原始 PDF 在书在，页面图片可以重新生成。
 
 ## 5. 为 AI 阶段预留
@@ -257,4 +283,4 @@ docker compose
 | M1 后端骨架与账户 | 项目结构、数据库迁移、管理员同步、登录 / 注册 / 会话、邀请码、读者管理 | 可以用邀请码注册读者并登录 |
 | M2 上传与拆页 | 上传接口、Worker、拆页、Admin 绘本列表与编辑 | 上传一本 PDF 后能在 Admin 看到处理进度和页面 |
 | M3 阅读端 | 小剧场书架、阅读页、横竖版排版、全屏 | 读者在 iPad 上完整读完一本书 |
-| M4 打磨与上线 | 预加载、添加到主屏幕、Docker Compose 部署、备份 | 在云服务器上通过 HTTPS 访问 |
+| M4 打磨与上线 | 预加载、添加到主屏幕、Docker Compose 部署、Nginx 参考配置、备份 | 在云服务器上通过用户的 Nginx 访问 |

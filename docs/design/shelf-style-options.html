@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 书架主题方案对比（D47）。在线版：https://claude.ai/artifact/Ts4YYzejRL5ZTtcBUmFqCo -->
+</head><body>
+<title>萤火书架方案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#F3F4F8; --surface:#FFFFFF; --ink:#1C1E33; --muted:#5C5F78; --line:#DCDEE8;
+  --accent:#A86A12; --accent-soft:#FBEFD8; --rec:#2F7A58;
+  --display:'ZCOOL XiaoWei','Songti SC',serif;
+  --sans:'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#11132A; --surface:#1A1D38; --ink:#ECEDF7; --muted:#A4A7C4; --line:#2C3056;
+    --accent:#F2C46B; --accent-soft:#2E2A2A; --rec:#7FD1A6;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#11132A; --surface:#1A1D38; --ink:#ECEDF7; --muted:#A4A7C4; --line:#2C3056;
+  --accent:#F2C46B; --accent-soft:#2E2A2A; --rec:#7FD1A6;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.7;padding-inline:16px;padding-block:32px 64px}
+.wrap{max-width:980px;margin:0 auto;display:grid;gap:40px}
+header h1{font-family:var(--display);font-weight:400;font-size:clamp(28px,5vw,40px);line-height:1.2;margin:0 0 8px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:18px;border-radius:2px;border:1px solid var(--line)}
+
+.opt{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:760px){.opt{grid-template-columns:1fr}}
+.opt h2{font-family:var(--display);font-weight:400;font-size:26px;margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.opt h2 .tag{font-family:var(--sans);font-size:12px;font-weight:500;letter-spacing:.06em;color:var(--muted)}
+.opt h2 .rec{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--rec);border:1px solid currentColor;border-radius:999px;padding:0 8px}
+.opt .idea{margin:6px 0 14px;color:var(--muted)}
+.opt dl{margin:0;display:grid;gap:10px}
+.opt dt{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent)}
+.opt dd{margin:0}
+
+/* ---------- 平板示意框（按 iPad 横屏 1180×820 比例） ---------- */
+.device{border-radius:18px;padding:10px;background:#0C0D18;box-shadow:0 10px 30px rgba(20,20,40,.18)}
+.screen{position:relative;aspect-ratio:1180/820;max-width:100%;border-radius:10px;overflow:hidden;container-type:inline-size;isolation:isolate}
+.bar{position:absolute;top:0;left:0;right:0;height:10cqw;display:flex;align-items:center;justify-content:space-between;padding:0 6cqw;z-index:4}
+.brand{display:inline-flex;flex-direction:column;align-items:center;line-height:1}
+.brand b{font-family:var(--display);font-weight:400;font-size:3.6cqw;letter-spacing:.2em}
+.brand small{font-family:var(--sans);font-size:1cqw;letter-spacing:.3em;margin-top:.6cqw;opacity:.7}
+.who{width:4.6cqw;height:4.6cqw;border-radius:50%;display:grid;place-items:center;font-size:2cqw}
+.row{position:absolute;left:8cqw;right:8cqw;top:15cqw;height:38cqw;display:flex;justify-content:space-around;align-items:flex-end;z-index:3}
+.book{margin:0;display:flex;flex-direction:column;align-items:center;position:relative}
+.cover{height:29cqw;aspect-ratio:3/4;border-radius:.6cqw;overflow:hidden;position:relative;z-index:1}
+.cover svg{display:block;width:100%;height:100%}
+.book figcaption{font-size:1.55cqw;margin-top:2.2cqw;white-space:nowrap}
+.deco{position:absolute;inset:0;z-index:1;pointer-events:none}
+.deco svg{position:absolute;display:block}
+.ff{position:absolute;width:1.1cqw;height:1.1cqw;border-radius:50%;background:radial-gradient(circle,#FFF8D6 0 25%,#FFD66B 45%,rgba(255,214,107,0) 72%);box-shadow:0 0 1.6cqw .5cqw rgba(255,214,107,.45);animation:float 7s ease-in-out infinite alternate}
+.ff:nth-child(2n){animation-duration:9s;animation-delay:-3s}
+.ff:nth-child(3n){animation-duration:11s;animation-delay:-5s}
+@keyframes float{0%{transform:translate(0,0);opacity:.55}50%{opacity:1}100%{transform:translate(1.6cqw,-1.4cqw);opacity:.7}}
+@media (prefers-reduced-motion:reduce){.ff{animation:none}}
+
+/* A 萤火夜空 */
+.a .screen{background:
+  radial-gradient(circle at 12% 22%,rgba(255,255,255,.85) 0 .14cqw,transparent .22cqw),
+  radial-gradient(circle at 27% 9%,rgba(255,255,255,.6) 0 .1cqw,transparent .18cqw),
+  radial-gradient(circle at 44% 16%,rgba(255,255,255,.75) 0 .12cqw,transparent .2cqw),
+  radial-gradient(circle at 63% 7%,rgba(255,255,255,.6) 0 .1cqw,transparent .18cqw),
+  radial-gradient(circle at 71% 25%,rgba(255,255,255,.7) 0 .12cqw,transparent .2cqw),
+  radial-gradient(circle at 90% 30%,rgba(255,255,255,.55) 0 .1cqw,transparent .18cqw),
+  radial-gradient(ellipse 70% 55% at 50% 0%,rgba(255,214,140,.16),transparent 70%),
+  linear-gradient(#1A1F4D,#262C63 62%,#30377A);color:#F5D98B}
+.a .who{background:rgba(255,255,255,.12)}
+.a .cover{box-shadow:0 0 0 .22cqw rgba(255,238,196,.55),0 0 2.6cqw rgba(255,214,140,.22)}
+.a .book::before{content:"";position:absolute;bottom:3cqw;left:50%;transform:translateX(-50%);width:30cqw;height:4.5cqw;background:radial-gradient(ellipse at center,rgba(255,214,107,.32),transparent 70%)}
+.a figcaption{color:rgba(245,217,139,.9)}
+
+/* B 晴天书架 */
+.b .screen{background:linear-gradient(#CBE6F2,#E4F2F3 55%,#EEF6EE);color:#2E3A63}
+.b .who{background:#FFFFFF;box-shadow:0 .3cqw .8cqw rgba(46,58,99,.15)}
+.b .row::after{content:"";position:absolute;left:-3cqw;right:-3cqw;bottom:3.6cqw;height:2.2cqw;border-radius:1.2cqw;background:linear-gradient(#E6BD84,#CF9A5C);box-shadow:0 1.2cqw 1.6cqw rgba(120,80,30,.22);z-index:0}
+.b .cover{margin-bottom:1.6cqw;box-shadow:0 0 0 .12cqw rgba(46,58,99,.12),.5cqw .6cqw 1.4cqw rgba(60,45,20,.28)}
+.b figcaption{color:#3D4870;position:relative;top:-.4cqw}
+
+/* C 黄昏萤火 */
+.c .screen{background:linear-gradient(#F4B997 0%,#D7A2B2 30%,#9185BF 58%,#4A4A8C 82%,#353873);color:#FFF2D6}
+.c .who{background:rgba(255,255,255,.2)}
+.c .cover{box-shadow:0 0 0 .2cqw rgba(255,248,230,.6),0 1cqw 2.4cqw rgba(40,30,70,.35)}
+.c figcaption{color:#FFF2D6;text-shadow:0 .1cqw .4cqw rgba(40,30,70,.5)}
+
+/* D 纸剪花园 */
+.d .screen{background:linear-gradient(#E3EFEA,#EEF5EC 60%);color:#35574A}
+.d .who{background:#FFFFFF;box-shadow:0 .3cqw .8cqw rgba(53,87,74,.15)}
+.d .deco .hills{filter:drop-shadow(0 -.5cqw .7cqw rgba(40,70,55,.18))}
+.d .cover{box-shadow:0 0 0 .12cqw rgba(53,87,74,.14),.4cqw .7cqw 1.5cqw rgba(40,70,55,.3)}
+.d figcaption{color:#2E4E41}
+
+/* ---------- 对比与推荐 ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h2{font-family:var(--display);font-weight:400;font-size:24px;margin:0 0 12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:500}
+td.dots{letter-spacing:.12em;color:var(--accent);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.dots s{text-decoration:none;color:var(--line)}
+tr.is-rec td:first-child{font-weight:700}
+.recbox{border-left:0;background:var(--accent-soft);border-color:transparent}
+.recbox p{margin:0 0 10px;max-width:70ch}
+.recbox p:last-child{margin:0}
+</style>
+
+<!-- 示意封面：彩色、浅色、深色三种，用来检验背景上封面是否清晰 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="cv-color" viewBox="0 0 30 40">
+    <rect width="30" height="40" fill="#7CC7EE"/>
+    <circle cx="23.5" cy="8" r="3.4" fill="#FFD54A"/>
+    <path d="M0 27 Q8 23 15 26 T30 25 V40 H0Z" fill="#6DBB4A"/>
+    <ellipse cx="15" cy="30" rx="6.5" ry="5.2" fill="#3A57B5"/>
+    <circle cx="12.6" cy="28.6" r="1.3" fill="#fff"/><circle cx="17.4" cy="28.6" r="1.3" fill="#fff"/>
+    <circle cx="12.8" cy="28.8" r=".55" fill="#1B1B2F"/><circle cx="17.2" cy="28.8" r=".55" fill="#1B1B2F"/>
+    <path d="M12 32.4 h6 l-1 1.2 -1-1 -1 1 -1-1 -1 1z" fill="#fff"/>
+    <text x="15" y="12.5" text-anchor="middle" font-size="5" font-weight="700" fill="#E4412F" stroke="#fff" stroke-width=".5" paint-order="stroke" font-family="Noto Sans SC,sans-serif">大怪兽</text>
+  </symbol>
+  <symbol id="cv-light" viewBox="0 0 30 40">
+    <rect width="30" height="40" fill="#FBFBF7"/>
+    <g fill="#D5E5F1"><circle cx="5" cy="6" r=".7"/><circle cx="24" cy="4" r=".6"/><circle cx="9" cy="17" r=".5"/><circle cx="26" cy="15" r=".7"/><circle cx="4" cy="25" r=".6"/><circle cx="20" cy="22" r=".5"/></g>
+    <path d="M0 33 Q15 29 30 33 V40 H0Z" fill="#EEF3F7"/>
+    <ellipse cx="15" cy="30" rx="4.2" ry="3.4" fill="#fff" stroke="#C9D3DC" stroke-width=".35"/>
+    <ellipse cx="13.6" cy="24.8" rx=".9" ry="2.6" fill="#fff" stroke="#C9D3DC" stroke-width=".35"/>
+    <ellipse cx="16.4" cy="24.8" rx=".9" ry="2.6" fill="#fff" stroke="#C9D3DC" stroke-width=".35"/>
+    <circle cx="15" cy="27.4" r="2.2" fill="#fff" stroke="#C9D3DC" stroke-width=".35"/>
+    <circle cx="14.2" cy="27.2" r=".3" fill="#8D9AA8"/><circle cx="15.8" cy="27.2" r=".3" fill="#8D9AA8"/>
+    <text x="15" y="12" text-anchor="middle" font-size="3.4" fill="#8FA4B8" font-family="Noto Sans SC,sans-serif">雪地里的小兔</text>
+  </symbol>
+  <symbol id="cv-dark" viewBox="0 0 30 40">
+    <rect width="30" height="40" fill="#1D2553"/>
+    <circle cx="20" cy="11" r="4.6" fill="#F7E7A1"/><circle cx="22" cy="9.6" r="4.2" fill="#1D2553"/>
+    <g fill="#F7E7A1"><circle cx="6" cy="7" r=".45"/><circle cx="11" cy="4" r=".35"/><circle cx="26" cy="19" r=".4"/><circle cx="4" cy="16" r=".35"/></g>
+    <path d="M0 34 Q15 30 30 34 V40 H0Z" fill="#141A3E"/>
+    <path d="M9 34 V28 l4-3.2 4 3.2 V34Z" fill="#141A3E"/>
+    <rect x="12" y="29.4" width="2" height="2" fill="#FFD66B"/>
+    <text x="15" y="22.5" text-anchor="middle" font-size="3.8" fill="#F7E7A1" font-family="Noto Sans SC,sans-serif">月亮，晚安</text>
+  </symbol>
+</svg>
+
+<div class="wrap">
+  <header>
+    <h1>萤火书架：四个方向</h1>
+    <p>目标是让书架多一点童趣，同时不抢封面的戏。每张示意图按 iPad 横屏比例绘制，书架上放了三本示意封面，专门用来检验封面在背景上是否清晰：</p>
+    <div class="legend" aria-label="示意封面说明">
+      <span><i style="background:#7CC7EE"></i>彩色封面（最常见）</span>
+      <span><i style="background:#FBFBF7"></i>大面积白色的浅色封面</span>
+      <span><i style="background:#1D2553"></i>深色封面</span>
+    </div>
+  </header>
+
+  <!-- A -->
+  <section class="opt a" id="a">
+    <div class="device"><div class="screen">
+      <div class="deco">
+        <svg viewBox="0 0 100 18" preserveAspectRatio="none" style="left:0;bottom:0;width:100%;height:13cqw">
+          <path d="M0 9 Q12 2 26 8 T52 7 T78 8 T100 5 V18 H0Z" fill="#2B3471"/>
+          <path d="M0 13 Q18 7 36 12 T70 11 T100 10 V18 H0Z" fill="#232A5E"/>
+        </svg>
+        <svg viewBox="0 0 10 10" style="right:7cqw;top:11cqw;width:4cqw;height:4cqw">
+          <circle cx="5" cy="5" r="4" fill="#F7E7A1"/><circle cx="6.8" cy="3.8" r="3.6" fill="#262C63"/>
+        </svg>
+        <span class="ff" style="left:6%;top:48%"></span><span class="ff" style="left:30%;top:72%"></span>
+        <span class="ff" style="left:52%;top:36%"></span><span class="ff" style="left:74%;top:70%"></span>
+        <span class="ff" style="left:93%;top:52%"></span><span class="ff" style="left:17%;top:26%"></span>
+      </div>
+      <div class="bar"><span class="brand"><b>萤火</b><small>FIREFLY TALES</small></span><span class="who">小</span></div>
+      <div class="row">
+        <figure class="book"><div class="cover"><svg><use href="#cv-color"/></svg></div><figcaption>波西和皮普 大怪兽</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-light"/></svg></div><figcaption>雪地里的小兔</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-dark"/></svg></div><figcaption>月亮，晚安</figcaption></figure>
+      </div>
+    </div></div>
+    <div>
+      <h2>A 萤火夜空 <span class="rec">推荐</span></h2>
+      <p class="idea">在现在的夜空上做减法再做加法：去掉剧场幕布，换成星星、弯月、圆圆的小山丘和几只慢慢飘动的萤火虫。</p>
+      <dl>
+        <dt>童趣从哪来</dt><dd>萤火虫缓慢地一明一暗地飘，山丘线条圆润，像睡前绘本里的夜晚；直接呼应产品名"萤火"。</dd>
+        <dt>封面怎么保持清晰</dt><dd>深色背景让彩色封面最鲜艳；每本书加一圈极细的暖白描边和光斑，深色封面也不会融进夜色。</dd>
+        <dt>需要注意</dt><dd>白天整体偏暗；萤火虫只放在封面之间的空隙和底部，数量控制在 6 只以内。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="opt b" id="b">
+    <div class="device"><div class="screen">
+      <div class="deco">
+        <svg viewBox="0 0 40 16" style="left:6cqw;top:12cqw;width:16cqw;height:6.4cqw"><path d="M6 14 a5 5 0 0 1 2-9.6 a7 7 0 0 1 13-2 a6 6 0 0 1 11 3.6 a4.6 4.6 0 0 1 1 8Z" fill="#fff" opacity=".9"/></svg>
+        <svg viewBox="0 0 40 16" style="right:9cqw;top:24cqw;width:12cqw;height:4.8cqw"><path d="M6 14 a5 5 0 0 1 2-9.6 a7 7 0 0 1 13-2 a6 6 0 0 1 11 3.6 a4.6 4.6 0 0 1 1 8Z" fill="#fff" opacity=".8"/></svg>
+        <svg viewBox="0 0 10 10" style="left:44cqw;top:2.4cqw;width:5.2cqw;height:5.2cqw"><circle cx="5" cy="5" r="3.4" fill="#FFE08A"/><circle cx="5" cy="5" r="4.8" fill="none" stroke="#FFE08A" stroke-width=".5" stroke-dasharray="1 1.2"/></svg>
+      </div>
+      <div class="bar"><span class="brand"><b>萤火</b><small>FIREFLY TALES</small></span><span class="who">小</span></div>
+      <div class="row">
+        <figure class="book"><div class="cover"><svg><use href="#cv-color"/></svg></div><figcaption>波西和皮普 大怪兽</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-light"/></svg></div><figcaption>雪地里的小兔</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-dark"/></svg></div><figcaption>月亮，晚安</figcaption></figure>
+      </div>
+    </div></div>
+    <div>
+      <h2>B 晴天书架 <span class="tag">白天感</span></h2>
+      <p class="idea">浅天蓝到浅薄荷的天空，几朵白云和一个小太阳，绘本立在一条圆角木书架上。</p>
+      <dl>
+        <dt>童趣从哪来</dt><dd>木书架是孩子熟悉的实物，书"站"在架子上，像家里的绘本角。</dd>
+        <dt>封面怎么保持清晰</dt><dd>彩色和深色封面在浅底上都很清楚；浅色封面靠一圈淡描边和投影把边缘"托"出来。</dd>
+        <dt>需要注意</dt><dd>晚上在暗室里亮度偏高；和阅读页的深色舞台之间反差较大，打开书时有一次明暗切换。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="opt c" id="c">
+    <div class="device"><div class="screen">
+      <div class="deco">
+        <svg viewBox="0 0 100 20" preserveAspectRatio="none" style="left:0;bottom:0;width:100%;height:12cqw">
+          <path d="M0 12 Q10 9 20 11 T40 10 T60 12 T80 9 T100 11 V20 H0Z" fill="#2F2F63"/>
+          <path d="M80 11 V6 l3.5-3 3.5 3 V11Z" fill="#2F2F63"/>
+          <rect x="82.6" y="6.6" width="1.8" height="1.8" fill="#FFD66B"/>
+          <path d="M10 11 V5.5" stroke="#2F2F63" stroke-width=".8"/><circle cx="10" cy="4.6" r="2.6" fill="#2F2F63"/>
+        </svg>
+        <span class="ff" style="left:8%;top:78%"></span><span class="ff" style="left:34%;top:84%"></span>
+        <span class="ff" style="left:61%;top:80%"></span><span class="ff" style="left:88%;top:74%"></span>
+      </div>
+      <div class="bar"><span class="brand"><b>萤火</b><small>FIREFLY TALES</small></span><span class="who">小</span></div>
+      <div class="row">
+        <figure class="book"><div class="cover"><svg><use href="#cv-color"/></svg></div><figcaption>波西和皮普 大怪兽</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-light"/></svg></div><figcaption>雪地里的小兔</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-dark"/></svg></div><figcaption>月亮，晚安</figcaption></figure>
+      </div>
+    </div></div>
+    <div>
+      <h2>C 黄昏萤火 <span class="tag">过渡感</span></h2>
+      <p class="idea">从暖橙到靛蓝的黄昏天空，底部是小屋和小树的剪影，窗户亮着灯，草地上萤火虫刚刚出来。</p>
+      <dl>
+        <dt>童趣从哪来</dt><dd>画面最有故事感，"天快黑了，该读绘本了"的氛围很强。</dd>
+        <dt>封面怎么保持清晰</dt><dd>靠暖白描边和投影；但背景从上到下颜色变化大，不同位置的封面对比度不一致。</dd>
+        <dt>需要注意</dt><dd>渐变色本身抢眼，书多、需要滚动时，同一本书在不同位置看起来会不一样。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="opt d" id="d">
+    <div class="device"><div class="screen">
+      <div class="deco">
+        <svg viewBox="0 0 40 16" style="left:12cqw;top:10.5cqw;width:13cqw;height:5.2cqw"><path d="M6 14 a5 5 0 0 1 2-9.6 a7 7 0 0 1 13-2 a6 6 0 0 1 11 3.6 a4.6 4.6 0 0 1 1 8Z" fill="#FAFCF8"/></svg>
+        <svg class="hills" viewBox="0 0 100 26" preserveAspectRatio="none" style="left:0;bottom:0;width:100%;height:17cqw">
+          <path d="M0 10 Q20 2 40 9 T80 6 T100 8 V26 H0Z" fill="#C4DCC3"/>
+          <path d="M0 16 Q25 9 50 15 T100 13 V26 H0Z" fill="#A5CBA9"/>
+          <path d="M0 21 Q30 16 60 20 T100 19 V26 H0Z" fill="#86B592"/>
+          <g fill="#F7D98B"><circle cx="14" cy="20.5" r=".6"/><circle cx="47" cy="17.6" r=".5"/><circle cx="83" cy="18.8" r=".6"/></g>
+        </svg>
+      </div>
+      <div class="bar"><span class="brand"><b>萤火</b><small>FIREFLY TALES</small></span><span class="who">小</span></div>
+      <div class="row">
+        <figure class="book"><div class="cover"><svg><use href="#cv-color"/></svg></div><figcaption>波西和皮普 大怪兽</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-light"/></svg></div><figcaption>雪地里的小兔</figcaption></figure>
+        <figure class="book"><div class="cover"><svg><use href="#cv-dark"/></svg></div><figcaption>月亮，晚安</figcaption></figure>
+      </div>
+    </div></div>
+    <div>
+      <h2>D 纸剪花园 <span class="tag">手作感</span></h2>
+      <p class="idea">柔和的灰绿色调，三层纸剪山丘带一点纸张投影，像把绘本立在一片小草坡上。</p>
+      <dl>
+        <dt>童趣从哪来</dt><dd>纸剪的层次和手作感，很像绘本插画本身的质感。</dd>
+        <dt>封面怎么保持清晰</dt><dd>背景饱和度最低，彩色封面很突出；浅色封面靠描边和投影；深色封面清楚。</dd>
+        <dt>需要注意</dt><dd>和"萤火"的品牌、阅读页的舞台风格关联较弱，更像另一个产品。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>对比</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>方案</th><th>童趣</th><th>彩色封面</th><th>浅色封面</th><th>深色封面</th><th>睡前不刺眼</th><th>与阅读页衔接</th></tr></thead>
+        <tbody>
+          <tr class="is-rec"><td>A 萤火夜空</td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●●</td><td class="dots">●●●●●</td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●●</td><td class="dots">●●●●●</td></tr>
+          <tr><td>B 晴天书架</td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●●</td><td class="dots">●●●<s>●●</s></td><td class="dots">●●●●●</td><td class="dots">●●<s>●●●</s></td><td class="dots">●●<s>●●●</s></td></tr>
+          <tr><td>C 黄昏萤火</td><td class="dots">●●●●●</td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●<s>●●</s></td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●<s>●</s></td></tr>
+          <tr><td>D 纸剪花园</td><td class="dots">●●●●<s>●</s></td><td class="dots">●●●●●</td><td class="dots">●●●<s>●●</s></td><td class="dots">●●●●●</td><td class="dots">●●●<s>●●</s></td><td class="dots">●●<s>●●●</s></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card recbox">
+    <h2>推荐：A 萤火夜空</h2>
+    <p>它在现有风格上改动最小，却把"剧场"换成了孩子更熟悉的"夜晚和萤火虫"，童趣来自慢慢飘动的萤火虫和圆润的山丘，而不是鲜艳的颜色，所以不会抢封面的戏。深色背景对彩色封面最友好，暖白描边解决了深色封面的问题；睡前在暗室里也不刺眼，打开书进入阅读页时明暗过渡自然。</p>
+    <p>如果希望白天更明亮，可以再加一步：白天（如 7:00–18:00）自动使用 B 晴天书架，晚上切换到 A，阅读页保持不变。这一步可以放到之后再决定。</p>
+  </section>
+</div>
+</body></html>
