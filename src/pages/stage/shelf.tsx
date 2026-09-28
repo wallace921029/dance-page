@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "cn";
 import { meQuery, useLogout } from "@/api/auth";
 import { useShelf } from "@/api/shelf";
+import type { ShelfBook } from "@/api/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,64 @@ function normalize(text: string) {
   return text.toLowerCase().replace(/\s+/g, "");
 }
 
+function useLandscapeRows(
+  mainRef: React.RefObject<HTMLElement | null>,
+  books: ShelfBook[] | undefined,
+  page: number,
+  plank: boolean,
+) {
+  const [layout, setLayout] = useState<{ height: number; rows: number[] } | null>(null);
+
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    if (!main || !books?.length) return;
+
+    const update = () => {
+      const wide = window.matchMedia("(min-width: 640px)").matches;
+      // 与网格列距、木书架内边距及书名最多两行的尺寸一致
+      const columnGap = plank ? 0 : wide ? 40 : 24;
+      const bookInset = plank ? (wide ? 40 : 24) : 0;
+      const coverWidth = Math.max(0, (main.clientWidth - 3 * columnGap) / 4 - bookInset);
+      const titleRoom = (wide ? 40 : 17) + (plank ? 20 : 12);
+      const rowGap = wide ? 12 : 8;
+      const pageBooks = books.slice((page - 1) * BOOKS_PER_PAGE, page * BOOKS_PER_PAGE);
+      const rows = Array.from({ length: Math.ceil(pageBooks.length / 4) }, (_, row) =>
+        Math.max(
+          ...pageBooks
+            .slice(row * 4, row * 4 + 4)
+            .map((book) => coverWidth / book.cover_aspect + titleRoom),
+        ),
+      );
+      const style = getComputedStyle(main);
+      const available = Math.max(
+        0,
+        main.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+      );
+      const gaps = (rows.length - 1) * rowGap;
+      const scale = Math.min(
+        1,
+        Math.max(0, available - gaps) / rows.reduce((sum, height) => sum + height, 0),
+      );
+      const fittedRows = rows.map((height) => height * scale);
+      const height = fittedRows.reduce((sum, row) => sum + row, gaps);
+      setLayout((current) =>
+        current?.height === height &&
+        current.rows.length === fittedRows.length &&
+        current.rows.every((row, index) => row === fittedRows[index])
+          ? current
+          : { height, rows: fittedRows },
+      );
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, [mainRef, books, page, plank]);
+
+  return layout;
+}
+
 /** 书架页。mode="favorites" 时为"我的收藏"（D55），展示方式与首页相同 */
 export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites" }) {
   const favoritesMode = mode === "favorites";
@@ -80,15 +139,23 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
   const [searchParams, setSearchParams] = useSearchParams();
   // 搜索词放在地址里（D54），从阅读页返回时保留
   const query = searchParams.get("q") ?? "";
-  const shelfBooks = favoritesMode
-    ? allBooks
-        ?.filter((b) => b.is_favorite)
-        // 最近收藏的在前
-        .sort((a, b) => (b.favorited_at ?? "").localeCompare(a.favorited_at ?? ""))
-    : allBooks;
-  const books = query.trim()
-    ? shelfBooks?.filter((b) => normalize(b.title).includes(normalize(query)))
-    : shelfBooks;
+  const shelfBooks = useMemo(
+    () =>
+      favoritesMode
+        ? allBooks
+            ?.filter((b) => b.is_favorite)
+            // 最近收藏的在前
+            .sort((a, b) => (b.favorited_at ?? "").localeCompare(a.favorited_at ?? ""))
+        : allBooks,
+    [allBooks, favoritesMode],
+  );
+  const books = useMemo(
+    () =>
+      query.trim()
+        ? shelfBooks?.filter((b) => normalize(b.title).includes(normalize(query)))
+        : shelfBooks,
+    [shelfBooks, query],
+  );
   const pageParam = searchParams.get("page");
   const requestedPage = Number(pageParam);
   const pageCount = Math.max(1, Math.ceil((books?.length ?? 0) / BOOKS_PER_PAGE));
@@ -104,6 +171,17 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
     shelfMotion.enabled,
     Boolean(books && books.length > 0 && !error),
   );
+  const mainRef = useRef<HTMLElement>(null);
+  const landscapeRows = useLandscapeRows(mainRef, books, page, Boolean(theme.plank));
+  const landscapeStyle: React.CSSProperties & {
+    "--compact-height"?: string;
+    "--compact-rows"?: string;
+  } | undefined = landscapeRows
+    ? {
+        "--compact-height": `${landscapeRows.height}px`,
+        "--compact-rows": landscapeRows.rows.map((height) => `${height}px`).join(" "),
+      }
+    : undefined;
   const searchRef = useRef<ShelfSearchHandle>(null);
   const setQuery = (value: string) =>
     setSearchParams(
@@ -213,11 +291,12 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
         </header>
 
         <main
+          ref={mainRef}
           className={cn(
             "flex min-h-0 flex-1 flex-col pt-2",
             // 底部给固定的翻页按钮留出位置
             pageCount > 1
-              ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+              ? "pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(7rem+env(safe-area-inset-bottom))]"
               : "pb-[calc(1.5rem+env(safe-area-inset-bottom))]",
           )}
         >
@@ -239,6 +318,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
               <motion.ul
                 key={page}
                 id="shelf-books"
+                style={landscapeStyle}
                 custom={direction}
                 variants={slideVariants}
                 initial="enter"
@@ -249,8 +329,8 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
                   ease: [0.22, 1, 0.36, 1],
                 }}
                 className={cn(
-                  // 每页 8 本：横屏 4×2，平板竖屏 3×3，手机竖屏 2×4；各行等高，填满剩余空间
-                  "grid min-h-0 flex-1 grid-cols-2 grid-rows-4 gap-y-4 landscape:grid-cols-4 landscape:grid-rows-2 sm:gap-y-6 sm:portrait:grid-cols-3 sm:portrait:grid-rows-3",
+                  // 横屏按封面比例收紧两排，空间不足时等比缩放；竖屏仍填满剩余空间
+                  "grid min-h-0 flex-1 grid-cols-2 grid-rows-4 gap-y-4 landscape:my-auto landscape:h-[var(--compact-height,100%)] landscape:flex-none landscape:grid-cols-4 landscape:grid-rows-[var(--compact-rows,repeat(2,minmax(0,1fr)))] landscape:gap-y-2 sm:gap-y-6 sm:landscape:gap-y-3 sm:portrait:grid-cols-3 sm:portrait:grid-rows-3",
                   // 木书架要连成一整条，列之间不留空隙，间距放到每本书内部
                   theme.plank ? "gap-x-0" : "gap-x-6 sm:gap-x-10",
                 )}

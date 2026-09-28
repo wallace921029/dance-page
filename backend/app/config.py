@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     admin_password: str = Field(min_length=6)
     data_dir: Path = Path("data")
     max_upload_mb: int = 200
-    app_secret_key: str = ""
+    # AI 服务商凭据（D82：写在 .env 里，修改后重启生效）
+    dashscope_api_key: str = ""
+    volcengine_ark_api_key: str = ""
+    volcengine_speech_api_key: str = ""
     # 未配置 HTTPS 时必须设为 false，否则浏览器不会保存登录 Cookie
     cookie_secure: bool = True
 

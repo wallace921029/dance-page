@@ -61,6 +61,10 @@ export const router = createBrowserRouter([
         path: "readers",
         lazy: () => import("@/pages/admin/readers").then((m) => ({ Component: m.default })),
       },
+      {
+        path: "ai",
+        lazy: () => import("@/pages/admin/ai-settings").then((m) => ({ Component: m.default })),
+      },
     ],
   },
   { path: "*", loader: () => redirect("/") },

@@ -10,6 +10,7 @@
 | [03-admin.md](./03-admin.md) | Admin 管理后台需求 |
 | [04-mvp-scope.md](./04-mvp-scope.md) | 第一期 MVP 功能清单与优先级 |
 | [05-tech-design.md](./05-tech-design.md) | 第一期技术设计：架构、数据模型、API、部署 |
+| [06-ai-tech-design.md](./06-ai-tech-design.md) | AI 阶段技术设计：服务商对接、数据模型、生成流程、接口、前端（初稿，待确认） |
 | [open-questions.md](./open-questions.md) | 待讨论 / 待决策事项 |
 | [decision-log.md](./decision-log.md) | 已做出的关键决策及理由 |
 | [design/reader-style-options.html](./design/reader-style-options.html) | 阅读端四个视觉风格方向的对比页（已选 B 小剧场） |

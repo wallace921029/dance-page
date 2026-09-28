@@ -6,6 +6,7 @@ from alembic.config import Config
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.ai.router import router as ai_router
 from app.auth.admin_sync import sync_admin
 from app.auth.router import create_limiters
 from app.auth.router import router as auth_router
@@ -77,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(readers_router)
     api.include_router(books_router)
     api.include_router(admin_books_router)
+    api.include_router(ai_router)
 
     @api.get("/health", tags=["系统"])
     def health() -> dict[str, str]:

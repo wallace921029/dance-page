@@ -14,7 +14,9 @@
 [✅] M2 上传与拆页          →  后端 + 登录页 + Admin 前端（绘本 / 邀请码 / 读者）
 [✅] M3 阅读端              →  注册页、小剧场书架、阅读页（对开 / 单页、跨页配对、读完合书、全屏）；桌面浏览器模拟 iPad / 手机验证通过
 [🟡] M4 打磨与上线           →  添加到主屏幕已完成；待做 Nginx 参考配置、部署说明、备份
-[ ] AI 阶段需求讨论（第一期可翻书后再开始）
+[✅] AI 阶段需求讨论         →  需求已确认（D61–D85），技术设计 `06-ai-tech-design.md` 已确认
+[✅] AI A1 AI 配置             →  服务商 Key 写在 .env（D82）；后台"AI 配置"页查看 Key 是否已设置、每种能力选服务商 / 模型、测试连接
+[ ] AI A0 试验                →  等用户在 .env 里填好两家的 Key
 ```
 
 ## 断点：等待用户的事项
@@ -23,12 +25,13 @@
 | --- | --- | --- | --- |
 | 1 | 在 iPad 上实测阅读页，按下方"iPad 验证清单"反馈结果 | 上线之前 | 待测试 |
 | 2 | 再提供 1–2 本 PDF，**至少一本横版**，放到 `samples/`（目前只有一本竖版：《波西和皮普 大怪兽》；横版目前只用生成的测试 PDF 验证过） | 上线之前 | 待提供 |
+| 3 | 在 `backend/.env`（本地）或部署目录的 `.env` 里填写 `DASHSCOPE_API_KEY`、`VOLCENGINE_ARK_API_KEY`、`VOLCENGINE_SPEECH_API_KEY`，重启后在后台"AI 配置"页各点一次"测试连接" | AI 试验（A0）之前 | 待填写 |
 
 ## 下次开始时（Claude 执行步骤）
 
 1. 读 `docs/README.md` 和本文件。
 2. 向用户简要汇报当前位置，确认两个断点：
-   - iPad 实测结果如何？有问题先修；全部通过后把 M0 结论写入 `05-tech-design.md` 第 3.2 节，并在 `decision-log.md` 记录（下一个编号 **D60**）。不达标时给出 2–3 个替代方案（其他库 / 自研 CSS 3D 翻页）并附推荐。
+   - iPad 实测结果如何？有问题先修；全部通过后把 M0 结论写入 `05-tech-design.md` 第 3.2 节，并在 `decision-log.md` 记录（下一个编号 **D86**）。不达标时给出 2–3 个替代方案（其他库 / 自研 CSS 3D 翻页）并附推荐。
    - `ls samples/` 检查是否有新 PDF；有则在 Admin 上传，重点看横版书和跨页检测结果。
 3. 进入 **M4 打磨与上线**（见 05 第 4 节、第 7 节）：
    - ~~添加到主屏幕~~（已完成，D59）；
@@ -72,7 +75,7 @@
 - **角色**：Claude 以产品经理 + 技术负责人的身份推进，每轮给出**带推荐方案的问题**（表格形式），用户常以"都同意"一次确认。
 - **文档规则**：
   - 只把**已确认**的内容写入 `docs/01–05`；未确认的放 [open-questions.md](./open-questions.md)。
-  - 每个决策追加到 [decision-log.md](./decision-log.md)，编号连续（当前最后一条是 **D59**）。
+  - 每个决策追加到 [decision-log.md](./decision-log.md)，编号连续（当前最后一条是 **D85**）。
   - 每次工作结束前更新本文件的"当前位置""断点""下次开始时"。
 - **视觉风格**：阅读端为"B 小剧场"。示意图的本地副本在 [design/reader-style-options.html](./design/reader-style-options.html)，在线版在 https://claude.ai/artifact/3TwChZ4w49eXKvKkSMSW1z（需要登录用户本人的 claude.ai 账号）。
 
@@ -82,7 +85,7 @@
   - 阅读端（小剧场风格）：登录 `/login`、注册 `/register?code=`、书架 `/`、阅读页 `/books/:id`（`src/pages/stage/`、`src/pages/login.tsx`、`src/pages/register.tsx`）；主题色和字体在 `src/index.css` 的 `@theme`（`bg-stage-*`、`font-stage-title`）。
   - 管理后台（shadcn/ui 工具风）：`/admin/books`、`/admin/books/:id`、`/admin/invites`、`/admin/readers`（`src/pages/admin/`）。
   - 数据请求：`src/api/*.ts`（react-query hooks + 接口类型 `src/api/types.ts`）；路由守卫 `src/router/guards.ts`；会话过期统一跳回登录页（`src/lib/query-client.ts`）。
-- **后端**（`backend/app/`）：账户、邀请码、读者、绘本上传与接口；Worker 拆页（`app/worker/`、`app/books/render.py`）；70 个 pytest 测试。
+- **后端**（`backend/app/`）：账户、邀请码、读者、绘本上传与接口；Worker 拆页（`app/worker/`、`app/books/render.py`）；AI 配置（`app/ai/`）；96 个 pytest 测试。
   - 本地运行：仓库根目录执行 `scripts/dev.sh`（API + Worker + Vite 一起启动，Ctrl+C 一起停止；`--lan` 让 iPad 等局域网设备可访问）。首次运行会自动创建 `backend/.env`、安装依赖。
   - 测试与检查：`cd backend && uv run pytest`、`uv run ruff check . && uv run ruff format .`；前端 `npm run build`、`npm run lint`。
   - 新增数据表：改 `app/models.py` 后运行 `uv run alembic revision --autogenerate -m "说明"`，检查生成的迁移文件。
@@ -118,3 +121,15 @@
 | 2026-09-28 | 书架翻页按钮改为手绘涂鸦风格（D57），页码加手画波浪线 |
 | 2026-09-28 | "我的收藏"入口改为头像左侧的手绘爱心按钮（D58），头像菜单不再包含收藏入口 |
 | 2026-09-28 | M4：添加到主屏幕（D59）——`manifest.webmanifest`、iOS meta、`scripts/make-icons.py` 生成的 PNG 图标，书架 / 阅读页 / Admin 顶栏让出设备安全区；修复阅读页书本四周留白被重复扣除（书比设计小一圈，书架"翻开"的落点也与真实封面对不上） |
+| 2026-09-28 | 横屏书架两排按封面宽高比计算合适行高并居中（D60）；修正仅改 `gap` 没有消除两排间大片留白的问题，为底部翻页多留空间，保持一屏显示和翻页栏位置不变 |
+| 2026-09-28 | 开始讨论 AI 阶段需求：确认分两步（朗读 → Voice Ready，动画 → Dance Ready!）、每页朗读按钮 + 自动朗读、音色按书选定、动画只让主角做简单循环动作、多模态大模型识别台词、失败人工处理、国内服务商（D61–D66） |
+| 2026-09-28 | AI 需求：朗读与动画相互独立；所有 AI 操作在绘本详情页"页面"模块按开页进行——大模型先分析整本故事、角色和音色提示词，管理员逐个开页选择分别 / 合并生成；多角色朗读；竖屏单页的合并开页播放规则（D67–D75） |
+| 2026-09-28 | AI 需求：百炼、火山两家都接入，三种能力各自可随时切换服务商；视频时长、清晰度可配置（D76、D77） |
+| 2026-09-28 | 切换服务商与视频参数的细节确认（D78、D79）；调研百炼 / 火山接口（百炼可按描述设计音色、万相首尾帧固定 5 秒；火山无音色设计接口），完成 AI 阶段技术设计初稿 `docs/06-ai-tech-design.md` |
+| 2026-09-28 | API Key 改为管理员在后台录入、加密存入 SQLite（D80）；开发顺序调整为先 A1 AI 配置、再 A0 试验 |
+| 2026-09-28 | AI A1：后端 `app/ai/`（服务商目录、Fernet 加密、配置读写、百炼 / 火山连接测试）、`ai_providers` / `ai_capabilities` / `ai_capability_configs` 三张表；后台"AI 配置"页 `/admin/ai`；`scripts/dev.sh` 缺少时自动生成 `APP_SECRET_KEY`；后端 94 个测试（D81） |
+| 2026-09-28 | 按用户要求 AI 服务商 Key 改回写在 `.env`（D82，撤回 D80）：去掉加密存储和 `APP_SECRET_KEY`，新迁移删除 `ai_providers` 表；后台 AI 配置页的服务商卡片改为只读显示；`.env.example`、`backend/.env.example`、`backend/.env` 加入四个空的 Key 配置项 |
+| 2026-09-28 | 豆包语音凭据改为单个 `VOLCENGINE_SPEECH_API_KEY`（D83），新版语音控制台不再有 App ID / Access Token |
+| 2026-09-28 | AI 配置页"选择模型"：从百炼 / 方舟的模型列表获取并按能力筛选，与内置推荐合并，仍可手动输入（D84）；后端 96 个测试 |
+| 2026-09-28 | AI 配置页的服务商由左右两张卡片改为一张卡片内用 Tabs 切换，标签上显示已设置的 Key 数量 |
+| 2026-09-28 | 百炼视觉模型列表加入 Qwen3.5 起的原生多模态通用模型，按版本排序，默认改为 `qwen3.8-max`（D85） |

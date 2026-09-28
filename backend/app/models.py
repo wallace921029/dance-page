@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.clock import utcnow
@@ -155,3 +155,28 @@ class Favorite(Base):
         ForeignKey("books.id", ondelete="CASCADE"), primary_key=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class AiCapability(Base):
+    """每种 AI 能力当前使用哪家服务商（D76）。没有记录时默认阿里云百炼。"""
+
+    __tablename__ = "ai_capabilities"
+
+    # 'vision' | 'tts' | 'video'
+    capability: Mapped[str] = mapped_column(String(16), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class AiCapabilityConfig(Base):
+    """某种能力在某家服务商上的模型设置。两家各存一份，切换服务商后再切回来设置还在。"""
+
+    __tablename__ = "ai_capability_configs"
+
+    capability: Mapped[str] = mapped_column(String(16), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    model: Mapped[str]
+    base_url: Mapped[str]
+    # 能力相关的其他设置，如视频的默认时长和清晰度（D79）
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)

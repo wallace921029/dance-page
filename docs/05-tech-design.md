@@ -65,7 +65,7 @@ backend/
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员账号密码。启动时同步到 users 表（不存在则创建，密码变化则更新） |
 | `DATA_DIR` | 数据目录，存放 `app.db` 和所有绘本文件 |
 | `MAX_UPLOAD_MB` | 上传上限，默认 200 |
-| `APP_SECRET_KEY` | AI 阶段用于加密存储 API Key；第一期可先配置好 |
+| `DASHSCOPE_API_KEY`、`VOLCENGINE_ARK_API_KEY`、`VOLCENGINE_SPEECH_API_KEY` | AI 阶段的服务商凭据（D82），见 [06 第 3 节](./06-ai-tech-design.md#3-ai-配置)；不用的服务商可以留空 |
 | `COOKIE_SECURE` | 会话 Cookie 是否带 `Secure`，默认 `true`；未配置 HTTPS 时设为 `false` |
 | `API_PORT` | 仅 Docker Compose 使用：API 在本机监听的端口，默认 8000 |
 
@@ -269,7 +269,10 @@ docker compose（仓库根目录 docker-compose.yml；M1 只有 api，worker 在
 
 ## 5. 为 AI 阶段预留
 
-第一期不实现，以下内容只为确认现有结构不需要推倒重来：
+第一期不实现，以下内容只为确认现有结构不需要推倒重来。
+
+> **注意**：AI 阶段需求已细化（D61–D75：故事与角色、按开页的生成单元、多角色朗读、朗读与动画相互独立），下面的字段设计已过时，以 [06 AI 阶段技术设计](./06-ai-tech-design.md) 为准。
+
 
 - **pages 表新增字段**：`script_text`（朗读台词）、`script_source`（`ocr` / `edited`）、`audio_script_hash`（生成音频时台词的哈希，与当前台词不一致即说明音频已过期，只需重做该页）、音频和视频的生成状态。
 - **books 表新增字段**：`ai_status`（未处理 / 处理中 / Dance Ready!）。

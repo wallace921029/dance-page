@@ -1,6 +1,6 @@
 import { Link, Outlet, useMatch, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, LogOut, Ticket, Users } from "lucide-react";
+import { BookOpen, LogOut, Sparkles, Ticket, Users } from "lucide-react";
 import { meQuery, useLogout } from "@/api/auth";
 import { APP_NAME } from "@/lib/app-info";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: "/admin/books", label: "绘本", icon: BookOpen },
   { to: "/admin/invites", label: "邀请码", icon: Ticket },
   { to: "/admin/readers", label: "读者", icon: Users },
+  { to: "/admin/ai", label: "AI 配置", icon: Sparkles },
 ];
 
 export default function AdminLayout() {

@@ -96,3 +96,92 @@ export interface ReaderBook extends ShelfBook {
   spread_start_page: SpreadStartPage;
   pages: BookPage[];
 }
+
+// ---------- AI 配置（backend/app/ai/schemas.py） ----------
+
+export type AiProviderId = "dashscope" | "volcengine";
+export type AiCapabilityId = "vision" | "tts" | "video";
+
+export interface AiCredentialField {
+  key: string;
+  /** 在服务器 .env 里设置的环境变量名 */
+  env_var: string;
+  label: string;
+  help: string;
+  is_set: boolean;
+  /** 只给末 4 位（"••••abcd"） */
+  preview: string | null;
+}
+
+export interface AiProvider {
+  id: AiProviderId;
+  name: string;
+  fields: AiCredentialField[];
+}
+
+export interface AiVideoOptions {
+  durations: number[];
+  resolutions: string[];
+  default_duration: number;
+  default_resolution: string;
+}
+
+export interface AiVideoSettings {
+  duration: number;
+  resolution: string;
+}
+
+export interface AiProviderConfig {
+  provider: AiProviderId;
+  model: string;
+  base_url: string;
+  options: Partial<AiVideoSettings>;
+  /** false 表示还没保存过，以上是默认值 */
+  saved: boolean;
+  default_model: string;
+  default_base_url: string;
+  model_suggestions: string[];
+  video_models: Record<string, AiVideoOptions>;
+  video_fallback: AiVideoOptions | null;
+  /** 这项能力在这家服务商上还缺哪些凭据（要在 .env 里设置的环境变量名） */
+  missing_credentials: string[];
+}
+
+export interface AiCapability {
+  id: AiCapabilityId;
+  name: string;
+  description: string;
+  /** 当前使用的服务商 */
+  provider: AiProviderId;
+  configs: AiProviderConfig[];
+}
+
+export interface AiSettings {
+  providers: AiProvider[];
+  capabilities: AiCapability[];
+}
+
+export interface AiCapabilityUpdate {
+  provider: AiProviderId;
+  model: string;
+  base_url: string;
+  options: Partial<AiVideoSettings>;
+}
+
+export interface AiTestResult {
+  status: "ok" | "failed" | "unsupported";
+  message: string;
+}
+
+export interface AiModelOption {
+  id: string;
+  /** 如"推荐""支持首尾帧""即将下线" */
+  note: string | null;
+  retiring: boolean;
+}
+
+export interface AiModelList {
+  models: AiModelOption[];
+  /** 没能从服务商取到列表时的说明 */
+  message: string | null;
+}
