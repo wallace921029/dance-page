@@ -33,6 +33,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
 import { formatDateTime, formatInviteCode } from "@/lib/format";
 import { PageHeader } from "@/pages/admin/layout";
+import { AnimatedTableRow, Reveal } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 const VALID_DAYS_ITEMS = [1, 3, 7, 30].map((days) => ({ value: days, label: `有效期 ${days} 天` }));
@@ -112,76 +113,86 @@ export default function AdminInvitesPage() {
       ) : error ? (
         <ErrorState error={error} />
       ) : invites.length === 0 ? (
-        <Empty className="border bg-background">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Ticket />
-            </EmptyMedia>
-            <EmptyTitle>还没有邀请码</EmptyTitle>
-            <EmptyDescription>生成邀请码后，注册链接会自动复制，发给读者即可注册。</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <Reveal>
+          <Empty className="border bg-background">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Ticket />
+              </EmptyMedia>
+              <EmptyTitle>还没有邀请码</EmptyTitle>
+              <EmptyDescription>
+                生成邀请码后，注册链接会自动复制，发给读者即可注册。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </Reveal>
       ) : (
-        <Card className="gap-0 py-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>邀请码</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>使用者</TableHead>
-                <TableHead>生成时间</TableHead>
-                <TableHead>过期时间</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invites.map((invite) => (
-                <TableRow key={invite.id}>
-                  <TableCell className="font-mono tracking-wider">
-                    {formatInviteCode(invite.code)}
-                  </TableCell>
-                  <TableCell>{STATUS_BADGES[invite.status]}</TableCell>
-                  <TableCell>{invite.used_by?.username ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDateTime(invite.created_at)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDateTime(invite.expires_at)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {invite.status === "unused" && (
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => void copyRegisterLink(invite)}>
-                          <Copy />
-                          复制注册链接
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          disabled={revoke.isPending}
-                          onClick={() =>
-                            revoke.mutate(invite.id, {
-                              onSuccess: () => toast.add({ title: "已作废", type: "success" }),
-                              onError: (err) =>
-                                toast.add({
-                                  title: "作废失败",
-                                  description: getErrorMessage(err),
-                                  type: "error",
-                                }),
-                            })
-                          }
-                        >
-                          作废
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
+        <Reveal>
+          <Card className="gap-0 py-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>邀请码</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>使用者</TableHead>
+                  <TableHead>生成时间</TableHead>
+                  <TableHead>过期时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+              </TableHeader>
+              <TableBody>
+                {invites.map((invite, index) => (
+                  <AnimatedTableRow key={invite.id} index={index}>
+                    <TableCell className="font-mono tracking-wider">
+                      {formatInviteCode(invite.code)}
+                    </TableCell>
+                    <TableCell>{STATUS_BADGES[invite.status]}</TableCell>
+                    <TableCell>{invite.used_by?.username ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDateTime(invite.created_at)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDateTime(invite.expires_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {invite.status === "unused" && (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void copyRegisterLink(invite)}
+                          >
+                            <Copy />
+                            复制注册链接
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            disabled={revoke.isPending}
+                            onClick={() =>
+                              revoke.mutate(invite.id, {
+                                onSuccess: () => toast.add({ title: "已作废", type: "success" }),
+                                onError: (err) =>
+                                  toast.add({
+                                    title: "作废失败",
+                                    description: getErrorMessage(err),
+                                    type: "error",
+                                  }),
+                              })
+                            }
+                          >
+                            作废
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </AnimatedTableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </Reveal>
       )}
     </>
   );

@@ -1,9 +1,20 @@
-import { Link, Outlet, useMatch, useNavigate } from "react-router";
+import { Link, Outlet, useLocation, useMatch, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, LogOut, Sparkles, Ticket, Users } from "lucide-react";
+import { MotionConfig, motion } from "motion/react";
 import { meQuery, useLogout } from "@/api/auth";
 import { APP_NAME } from "@/lib/app-info";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -20,6 +31,7 @@ const NAV_ITEMS = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { data: me } = useQuery(meQuery);
   const logout = useLogout();
 
@@ -35,25 +47,52 @@ export default function AdminLayout() {
               ))}
             </NavigationMenuList>
           </NavigationMenu>
-          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{me?.username}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={logout.isPending}
-              onClick={() =>
-                logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) })
-              }
-            >
-              <LogOut />
-              退出
-            </Button>
-          </div>
+          {me && (
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="账户"
+                  render={<Button variant="ghost" size="icon" className="rounded-full" />}
+                >
+                  <Avatar>
+                    <AvatarFallback>{me.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-40">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>{me.username}</DropdownMenuLabel>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={logout.isPending}
+                    onClick={() =>
+                      logout.mutate(undefined, {
+                        onSuccess: () => navigate("/login", { replace: true }),
+                      })
+                    }
+                  >
+                    <LogOut />
+                    退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <Outlet />
-      </main>
+      {/* "减少动态效果"时只保留淡入，去掉位移和缩放 */}
+      <MotionConfig reducedMotion="user">
+        {/* 切换页面时内容淡入；只看路径，同一页里翻页、筛选不重播 */}
+        <motion.main
+          key={pathname}
+          className="mx-auto max-w-6xl px-4 py-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Outlet />
+        </motion.main>
+      </MotionConfig>
     </div>
   );
 }

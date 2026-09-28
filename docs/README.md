@@ -4,13 +4,13 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [progress.md](./progress.md) | **项目进度与断点**：从这里继续 |
+| [progress.md](./progress.md) | **项目进度与交接**：现状、新电脑上手、接下来要做的事——从这里继续 |
 | [01-product-overview.md](./01-product-overview.md) | 产品定位、角色、版本规划、核心概念 |
 | [02-reader.md](./02-reader.md) | 阅读端需求 |
 | [03-admin.md](./03-admin.md) | Admin 管理后台需求 |
 | [04-mvp-scope.md](./04-mvp-scope.md) | 第一期 MVP 功能清单与优先级 |
-| [05-tech-design.md](./05-tech-design.md) | 第一期技术设计：架构、数据模型、API、部署 |
-| [06-ai-tech-design.md](./06-ai-tech-design.md) | AI 阶段技术设计：服务商对接、数据模型、生成流程、接口、前端（初稿，待确认） |
+| [05-tech-design.md](./05-tech-design.md) | 第一期技术设计：架构、数据模型、API、部署（第 5 节 AI 预留已过时，以 06 为准） |
+| [06-ai-tech-design.md](./06-ai-tech-design.md) | AI 阶段技术设计：服务商对接、数据模型、生成流程、接口、前端、开发顺序 A0–A4（已确认，A1 已实现） |
 | [open-questions.md](./open-questions.md) | 待讨论 / 待决策事项 |
 | [decision-log.md](./decision-log.md) | 已做出的关键决策及理由 |
 | [design/reader-style-options.html](./design/reader-style-options.html) | 阅读端四个视觉风格方向的对比页（已选 B 小剧场） |

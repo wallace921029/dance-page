@@ -53,6 +53,7 @@ import { toast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
 import { PageHeader } from "@/pages/admin/layout";
+import { Reveal } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 export default function AdminAiSettingsPage() {
@@ -71,30 +72,28 @@ export default function AdminAiSettingsPage() {
         <ErrorState error={error} />
       ) : (
         <div className="space-y-8">
-          <section>
+          <Reveal as="section">
             <h2 className="font-medium">服务商</h2>
             <p className="mt-1 mb-3 text-sm text-muted-foreground">
               API Key 写在服务器的 .env 文件里，修改后重启服务生效；这里只显示是否已设置和末 4
               位。两家都填好后，下面每项能力可以随时切换服务商。
             </p>
             <ProvidersCard providers={settings.providers} />
-          </section>
+          </Reveal>
 
-          <section>
+          <Reveal as="section" index={1}>
             <h2 className="font-medium">能力</h2>
             <p className="mt-1 mb-3 text-sm text-muted-foreground">
               每项能力分别选择服务商和模型。切换服务商不影响已经生成的朗读和动画。
             </p>
             <div className="space-y-4">
-              {settings.capabilities.map((capability) => (
-                <CapabilityCard
-                  key={capability.id}
-                  capability={capability}
-                  providers={settings.providers}
-                />
+              {settings.capabilities.map((capability, i) => (
+                <Reveal key={capability.id} index={i + 2}>
+                  <CapabilityCard capability={capability} providers={settings.providers} />
+                </Reveal>
               ))}
             </div>
-          </section>
+          </Reveal>
         </div>
       )}
     </>
@@ -343,7 +342,12 @@ function CapabilityCard({
               </AlertDescription>
             </Alert>
           )}
-          {test.data && <TestResultAlert result={test.data} />}
+          {test.data && (
+            // 每次测试的结果都重新播放进场
+            <Reveal key={test.submittedAt}>
+              <TestResultAlert result={test.data} />
+            </Reveal>
+          )}
         </CardContent>
         <CardFooter className="justify-end gap-2">
           {dirty && <span className="mr-auto text-sm text-muted-foreground">有未保存的修改</span>}

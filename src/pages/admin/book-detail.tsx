@@ -40,6 +40,7 @@ import { formatDateTime, formatFileSize } from "@/lib/format";
 import { DeleteBookButton, VisibilityButton } from "@/pages/admin/book-actions";
 import { BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
 import { PageHeader } from "@/pages/admin/layout";
+import { Reveal, RevealItem } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 export default function AdminBookDetailPage() {
@@ -79,27 +80,37 @@ export default function AdminBookDetailPage() {
       </PageHeader>
 
       {book.processing_status === "processing" && (
-        <Card className="mb-6">
-          <CardContent>
-            <ProcessingProgress book={book}>
-              <ProgressLabel>
-                正在拆页
-                {book.progress?.total ? `：${book.progress.done} / ${book.progress.total}` : "…"}
-              </ProgressLabel>
-            </ProcessingProgress>
-          </CardContent>
-        </Card>
+        <Reveal>
+          <Card className="mb-6">
+            <CardContent>
+              <ProcessingProgress book={book}>
+                <ProgressLabel>
+                  正在拆页
+                  {book.progress?.total ? `：${book.progress.done} / ${book.progress.total}` : "…"}
+                </ProgressLabel>
+              </ProcessingProgress>
+            </CardContent>
+          </Card>
+        </Reveal>
       )}
       {book.processing_status === "failed" && (
-        <Alert variant="destructive" className="mb-6">
-          <CircleAlert />
-          <AlertTitle>处理失败：{book.processing_error}</AlertTitle>
-          <AlertDescription>请删除这本绘本后重新上传。</AlertDescription>
-        </Alert>
+        <Reveal>
+          <Alert variant="destructive" className="mb-6">
+            <CircleAlert />
+            <AlertTitle>处理失败：{book.processing_error}</AlertTitle>
+            <AlertDescription>请删除这本绘本后重新上传。</AlertDescription>
+          </Alert>
+        </Reveal>
       )}
 
-      <InfoForm key={`${book.id}-${book.updated_at}`} book={book} />
-      {ready && <PagesSection book={book} />}
+      <Reveal index={1}>
+        <InfoForm key={`${book.id}-${book.updated_at}`} book={book} />
+      </Reveal>
+      {ready && (
+        <Reveal index={2}>
+          <PagesSection book={book} />
+        </Reveal>
+      )}
     </>
   );
 }
@@ -169,7 +180,8 @@ function InfoForm({ book }: { book: AdminBookDetail }) {
     e.preventDefault();
     update.mutate(changes, {
       onSuccess: () => toast.add({ title: "已保存", type: "success" }),
-      onError: (err) => toast.add({ title: "保存失败", description: getErrorMessage(err), type: "error" }),
+      onError: (err) =>
+        toast.add({ title: "保存失败", description: getErrorMessage(err), type: "error" }),
     });
   };
 
@@ -316,33 +328,41 @@ function PagesSection({ book }: { book: AdminBookDetail }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-      {portrait ? (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3">
-          {toSpreads(book.pages, book.spread_start_page).map((spread, i) => (
-            <div key={i} className="grid grid-cols-2">
-              {spread.map((item, j) => (
-                <Fragment key={j}>
-                  {item === "empty" ? (
-                    <div />
-                  ) : item === "blank" ? (
-                    <div className="self-start">
-                      <div
-                        className="rounded-l-sm bg-stone-50 ring-1 ring-border"
-                        style={{ aspectRatio: `${book.pages[0].width} / ${book.pages[0].height}` }}
-                      />
-                      <p className="mt-1 text-center text-xs text-muted-foreground">（空白）</p>
-                    </div>
-                  ) : (
-                    thumb(item)
-                  )}
-                </Fragment>
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 gap-4 md:grid-cols-4">{book.pages.map(thumb)}</div>
-      )}
+        {portrait ? (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3">
+            {toSpreads(book.pages, book.spread_start_page).map((spread, i) => (
+              <RevealItem key={i} index={i} className="grid grid-cols-2">
+                {spread.map((item, j) => (
+                  <Fragment key={j}>
+                    {item === "empty" ? (
+                      <div />
+                    ) : item === "blank" ? (
+                      <div className="self-start">
+                        <div
+                          className="rounded-l-sm bg-stone-50 ring-1 ring-border"
+                          style={{
+                            aspectRatio: `${book.pages[0].width} / ${book.pages[0].height}`,
+                          }}
+                        />
+                        <p className="mt-1 text-center text-xs text-muted-foreground">（空白）</p>
+                      </div>
+                    ) : (
+                      thumb(item)
+                    )}
+                  </Fragment>
+                ))}
+              </RevealItem>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4 md:grid-cols-4">
+            {book.pages.map((page, i) => (
+              <RevealItem key={page.index} index={i} className="self-start">
+                {thumb(page)}
+              </RevealItem>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

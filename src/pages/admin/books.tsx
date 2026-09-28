@@ -40,6 +40,7 @@ import { formatDateTime, formatFileSize } from "@/lib/format";
 import { DeleteBookButton, VisibilityButton } from "@/pages/admin/book-actions";
 import { BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
 import { PageHeader } from "@/pages/admin/layout";
+import { AnimatedTableRow, Reveal } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 const MAX_UPLOAD_MB = 200;
@@ -90,7 +91,8 @@ export default function AdminBooksPage() {
       event.preventDefault();
       return;
     }
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
     event.preventDefault();
     setSearchParams((current) => searchParamsForPage(current, target));
   };
@@ -124,7 +126,10 @@ export default function AdminBooksPage() {
 
   return (
     <>
-      <PageHeader title="绘本" description="上传 PDF 后会自动拆页，处理完成即上架，读者可在书架上看到。">
+      <PageHeader
+        title="绘本"
+        description="上传 PDF 后会自动拆页，处理完成即上架，读者可在书架上看到。"
+      >
         <Input
           ref={fileInput}
           type="file"
@@ -144,18 +149,22 @@ export default function AdminBooksPage() {
       </PageHeader>
 
       {uploads.length > 0 && (
-        <Card className="mb-4">
-          <CardContent className="space-y-4">
-            {uploads.map((task) => (
-              <Progress key={task.id} value={task.progress * 100}>
-                <ProgressLabel className="min-w-0 flex-1 truncate">{task.name}</ProgressLabel>
-                <span className="shrink-0 text-sm text-muted-foreground">
-                  {task.progress < 1 ? `上传中 ${Math.round(task.progress * 100)}%` : "等待服务器保存…"}
-                </span>
-              </Progress>
-            ))}
-          </CardContent>
-        </Card>
+        <Reveal className="mb-4">
+          <Card>
+            <CardContent className="space-y-4">
+              {uploads.map((task) => (
+                <Progress key={task.id} value={task.progress * 100}>
+                  <ProgressLabel className="min-w-0 flex-1 truncate">{task.name}</ProgressLabel>
+                  <span className="shrink-0 text-sm text-muted-foreground">
+                    {task.progress < 1
+                      ? `上传中 ${Math.round(task.progress * 100)}%`
+                      : "等待服务器保存…"}
+                  </span>
+                </Progress>
+              ))}
+            </CardContent>
+          </Card>
+        </Reveal>
       )}
 
       {isPending ? (
@@ -163,97 +172,108 @@ export default function AdminBooksPage() {
       ) : error ? (
         <ErrorState error={error} />
       ) : books.length === 0 ? (
-        <Empty className="border bg-background">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <BookOpen />
-            </EmptyMedia>
-            <EmptyTitle>还没有绘本</EmptyTitle>
-            <EmptyDescription>点击右上角"上传 PDF"添加第一本绘本，单个文件不超过 200MB。</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <Reveal>
+          <Empty className="border bg-background">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BookOpen />
+              </EmptyMedia>
+              <EmptyTitle>还没有绘本</EmptyTitle>
+              <EmptyDescription>
+                点击右上角"上传 PDF"添加第一本绘本，单个文件不超过 200MB。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </Reveal>
       ) : (
-        <Card className="gap-0 py-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">封面</TableHead>
-                <TableHead>书名</TableHead>
-                <TableHead className="w-40">状态</TableHead>
-                <TableHead className="w-16 text-right">页数</TableHead>
-                <TableHead className="w-24 text-right">大小</TableHead>
-                <TableHead className="w-40">上传时间</TableHead>
-                <TableHead className="w-44 text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageBooks?.map((book) => (
-                <BookRow key={book.id} book={book} />
-              ))}
-            </TableBody>
-          </Table>
-          {pageCount > 1 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
-              <span className="text-sm text-muted-foreground">
-                第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, books.length)} 条，共{" "}
-                {books.length} 本
-              </span>
-              <Pagination aria-label="绘本列表分页" className="mx-0 w-auto max-w-full overflow-x-auto">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href={page > 1 ? pageHref(page - 1) : undefined}
-                      onClick={changePage(page - 1)}
-                      aria-label="上一页"
-                      aria-disabled={page === 1}
-                      tabIndex={page === 1 ? -1 : undefined}
-                      className={page === 1 ? "pointer-events-none opacity-50" : undefined}
-                      text="上一页"
-                    />
-                  </PaginationItem>
-                  {pageNumbers.map((number, index) => (
-                    <Fragment key={number}>
-                      {index > 0 && number > pageNumbers[index - 1] + 1 && (
+        <Reveal>
+          <Card className="gap-0 py-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">封面</TableHead>
+                  <TableHead>书名</TableHead>
+                  <TableHead className="w-40">状态</TableHead>
+                  <TableHead className="w-16 text-right">页数</TableHead>
+                  <TableHead className="w-24 text-right">大小</TableHead>
+                  <TableHead className="w-40">上传时间</TableHead>
+                  <TableHead className="w-44 text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pageBooks?.map((book, index) => (
+                  <BookRow key={book.id} book={book} index={index} />
+                ))}
+              </TableBody>
+            </Table>
+            {pageCount > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+                <span className="text-sm text-muted-foreground">
+                  第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, books.length)} 条，共{" "}
+                  {books.length} 本
+                </span>
+                <Pagination
+                  aria-label="绘本列表分页"
+                  className="mx-0 w-auto max-w-full overflow-x-auto"
+                >
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href={page > 1 ? pageHref(page - 1) : undefined}
+                        onClick={changePage(page - 1)}
+                        aria-label="上一页"
+                        aria-disabled={page === 1}
+                        tabIndex={page === 1 ? -1 : undefined}
+                        className={page === 1 ? "pointer-events-none opacity-50" : undefined}
+                        text="上一页"
+                      />
+                    </PaginationItem>
+                    {pageNumbers.map((number, index) => (
+                      <Fragment key={number}>
+                        {index > 0 && number > pageNumbers[index - 1] + 1 && (
+                          <PaginationItem>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )}
                         <PaginationItem>
-                          <PaginationEllipsis />
+                          <PaginationLink
+                            href={pageHref(number)}
+                            onClick={changePage(number)}
+                            isActive={number === page}
+                            aria-label={`第 ${number} 页`}
+                          >
+                            {number}
+                          </PaginationLink>
                         </PaginationItem>
-                      )}
-                      <PaginationItem>
-                        <PaginationLink
-                          href={pageHref(number)}
-                          onClick={changePage(number)}
-                          isActive={number === page}
-                          aria-label={`第 ${number} 页`}
-                        >
-                          {number}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </Fragment>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      href={page < pageCount ? pageHref(page + 1) : undefined}
-                      onClick={changePage(page + 1)}
-                      aria-label="下一页"
-                      aria-disabled={page === pageCount}
-                      tabIndex={page === pageCount ? -1 : undefined}
-                      className={page === pageCount ? "pointer-events-none opacity-50" : undefined}
-                      text="下一页"
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-        </Card>
+                      </Fragment>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href={page < pageCount ? pageHref(page + 1) : undefined}
+                        onClick={changePage(page + 1)}
+                        aria-label="下一页"
+                        aria-disabled={page === pageCount}
+                        tabIndex={page === pageCount ? -1 : undefined}
+                        className={
+                          page === pageCount ? "pointer-events-none opacity-50" : undefined
+                        }
+                        text="下一页"
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </Card>
+        </Reveal>
       )}
     </>
   );
 }
 
-function BookRow({ book }: { book: AdminBook }) {
+function BookRow({ book, index }: { book: AdminBook; index: number }) {
   return (
-    <TableRow>
+    <AnimatedTableRow index={index}>
       <TableCell>
         <Link to={`/admin/books/${book.id}`} aria-label={book.title}>
           <Cover book={book} />
@@ -293,7 +313,7 @@ function BookRow({ book }: { book: AdminBook }) {
           <DeleteBookButton book={book} size="sm" variant="ghost" />
         </div>
       </TableCell>
-    </TableRow>
+    </AnimatedTableRow>
   );
 }
 
