@@ -1,0 +1,29 @@
+# 部署：cp .env.example .env，填好管理员账号密码后 docker compose up -d --build
+# Nginx 由部署者自行配置：/api/ 转发到 127.0.0.1:8000，/ 指向前端构建产物 dist/
+services:
+  api:
+    build: ./backend
+    image: dance-page-backend
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    ports:
+      # 只监听本机，由 Nginx 对外提供服务
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  # 后台任务（PDF 拆页）。与 api 共用镜像和数据目录；数据库迁移由 api 启动时执行，worker 会等待
+  worker:
+    build: ./backend
+    image: dance-page-backend
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    depends_on:
+      - api
+    restart: unless-stopped

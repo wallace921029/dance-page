@@ -30,3 +30,6 @@ dist-ssr
 
 # Sample picture-book PDFs for local testing (copyrighted, never commit)
 samples/
+
+# Docker Compose 部署时的数据目录（数据库和绘本文件）
+/data/

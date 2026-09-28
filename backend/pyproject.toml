@@ -1,0 +1,37 @@
+[project]
+name = "dance-page-backend"
+version = "0.1.0"
+description = "dance-page 后端"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "argon2-cffi>=25.1.0",
+    "fastapi>=0.141.1",
+    "numpy>=2",
+    "pillow>=11",
+    "pydantic-settings>=2.15.0",
+    "pypdfium2>=4.30",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
