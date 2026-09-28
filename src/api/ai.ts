@@ -223,3 +223,29 @@ export function useGenerateSpreadAudio(bookId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
   });
 }
+
+/** 用当前封面和动作描述生成（或重新生成）封面动画（D96） */
+export function useGenerateCoverVideo(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post<{ job_id: number; status: string }>(`/admin/books/${bookId}/ai/cover-video`))
+        .data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 启用 / 停用封面动画：启用后读者在书架和阅读页封面上看到它 */
+export function useSetCoverVideoEnabled(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const url = `/admin/books/${bookId}/ai/cover-video/enabled`;
+      return (enabled ? await api.put<BookAi>(url) : await api.delete<BookAi>(url)).data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(bookAiKey(bookId), data);
+      void queryClient.invalidateQueries({ queryKey: ["shelf"] });
+    },
+  });
+}

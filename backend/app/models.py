@@ -96,6 +96,22 @@ class Book(Base):
     )  # 'left_first' | 'right_first'
     voice_ready_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     dance_ready_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # 封面动画（D96）：像魔法报纸上的照片，封面里的角色轻轻动；与 Dance Ready! 相互独立
+    cover_motion_prompt: Mapped[str | None]
+    # 'none' | 'queued' | 'running' | 'ready' | 'failed'
+    cover_video_status: Mapped[str] = mapped_column(
+        String(16), default="none", server_default="none"
+    )
+    cover_video_error: Mapped[str | None]
+    # 重新生成后加 1，拼进视频地址让缓存失效
+    cover_video_version: Mapped[int] = mapped_column(default=0, server_default="0")
+    # 生成时用的动作描述、模型和清晰度的指纹；与当前不一致即显示"需要重新生成"
+    cover_video_source_hash: Mapped[str | None]
+    # 生成时用的封面："{cover_page_index}:{assets_version}"。换了封面后旧动画对不上，读者不再看到
+    cover_video_frame: Mapped[str | None] = mapped_column(String(32))
+    cover_video_resolution: Mapped[str | None] = mapped_column(String(16))
+    # 管理员确认后读者才能看到；为空表示未启用
+    cover_video_enabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -219,7 +235,7 @@ class Job(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # 'render_pdf' | 'ai_analyze_book' | 'ai_draft_unit'
-    # 'ai_voice' | 'ai_tts_unit' | 'ai_video_unit'
+    # 'ai_voice' | 'ai_tts_unit' | 'ai_cover_video' | 'ai_video_unit'
     type: Mapped[str] = mapped_column(String(32))
     book_id: Mapped[str] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
     unit_id: Mapped[str | None] = mapped_column(
@@ -230,7 +246,10 @@ class Job(Base):
     )
     remote_task_id: Mapped[str | None]
     next_poll_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    # 任务参数，如视频任务提交时用的服务商、模型和指纹（查询、完成时使用）
+    payload: Mapped[dict | None] = mapped_column(JSON)
     # 'queued' | 'running' | 'done' | 'failed'
+    # | 'waiting'：视频已提交给服务商，到 next_poll_at 再查询
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     progress_done: Mapped[int] = mapped_column(default=0)
     progress_total: Mapped[int] = mapped_column(default=0)

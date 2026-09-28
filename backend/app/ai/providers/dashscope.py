@@ -6,7 +6,7 @@ import re
 
 import httpx
 
-from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult
+from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult, VideoPoll
 from app.ai.providers.common import chat_ping, describe_error
 from app.ai.settings import CapabilityConfig
 
@@ -166,3 +166,132 @@ def synthesize(
     if download.status_code != 200:
         raise ProviderError(f"下载合成音频失败：HTTP {download.status_code}")
     return download.content
+
+
+# 首尾帧视频（万相 kf2v）：异步任务，提交后按任务 ID 查询
+VIDEO_TIMEOUT = 60.0
+_VIDEO_TASK_STATUS = {
+    "PENDING": "running",
+    "RUNNING": "running",
+    "SUCCEEDED": "succeeded",
+    "FAILED": "failed",
+    "CANCELED": "failed",
+    "UNKNOWN": "failed",
+}
+
+
+def _auth(credentials: dict[str, str]) -> dict[str, str]:
+    return {"Authorization": f"Bearer {credentials['api_key']}"}
+
+
+def _upload_image(
+    client: httpx.Client, config: CapabilityConfig, credentials: dict[str, str], data: bytes
+) -> str:
+    """把图片上传到百炼账号下的临时存储，返回 oss:// 地址。
+
+    绘本图片只有登录后才能访问，不能给服务商公开链接（docs/06 第 2 节）；
+    做法与 dashscope SDK 传本地文件时相同：先取上传凭证，再直传 OSS。
+    """
+    res = client.get(
+        f"{config.base_url.rstrip('/')}/uploads",
+        params={"action": "getPolicy", "model": config.model},
+        headers=_auth(credentials),
+        timeout=VIDEO_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        policy = res.json()["data"]
+        key = f"{policy['upload_dir']}/frame.jpg"
+        form = {
+            "OSSAccessKeyId": policy["oss_access_key_id"],
+            "Signature": policy["signature"],
+            "policy": policy["policy"],
+            "key": key,
+            "x-oss-object-acl": policy["x_oss_object_acl"],
+            "x-oss-forbid-overwrite": policy["x_oss_forbid_overwrite"],
+            "success_action_status": "200",
+            "x-oss-content-type": "image/jpeg",
+        }
+        upload_host = policy["upload_host"]
+    except (ValueError, KeyError, TypeError) as e:
+        raise ProviderError("服务商返回的上传凭证无法识别") from e
+    uploaded = client.post(
+        upload_host,
+        data=form,
+        files={"file": ("frame.jpg", data, "image/jpeg")},
+        timeout=VIDEO_TIMEOUT,
+    )
+    if uploaded.status_code != 200:
+        raise ProviderError(f"上传画面到服务商失败：HTTP {uploaded.status_code}")
+    return f"oss://{key}"
+
+
+def submit_video(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    frame_jpeg: bytes,
+    prompt: str,
+    negative_prompt: str,
+    resolution: str,
+) -> str:
+    if "kf2v" not in config.model:
+        raise ProviderError(
+            f"动画需要首尾帧视频模型（如 wan2.2-kf2v-flash），当前是 {config.model}，"
+            "请在「AI 配置」中更换动画视频模型"
+        )
+    frame_url = _upload_image(client, config, credentials, frame_jpeg)
+    res = client.post(
+        f"{config.base_url.rstrip('/')}/services/aigc/image2video/video-synthesis",
+        headers={
+            **_auth(credentials),
+            "X-DashScope-Async": "enable",
+            # 让服务商读取刚上传的 oss:// 图片
+            "X-DashScope-OssResourceResolve": "enable",
+        },
+        json={
+            "model": config.model,
+            "input": {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "first_frame_url": frame_url,
+                "last_frame_url": frame_url,
+            },
+            # 万相首尾帧模型的时长固定 5 秒，不传；提示词不让服务商改写
+            "parameters": {"resolution": resolution, "prompt_extend": False},
+        },
+        timeout=VIDEO_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        return res.json()["output"]["task_id"]
+    except (ValueError, KeyError, TypeError) as e:
+        raise ProviderError("服务商返回的任务结果无法识别") from e
+
+
+def poll_video(
+    client: httpx.Client, config: CapabilityConfig, credentials: dict[str, str], task_id: str
+) -> VideoPoll:
+    res = client.get(
+        f"{config.base_url.rstrip('/')}/tasks/{task_id}",
+        headers=_auth(credentials),
+        timeout=VIDEO_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        output = res.json()["output"]
+        status = _VIDEO_TASK_STATUS.get(output["task_status"], "running")
+    except (ValueError, KeyError, TypeError) as e:
+        raise ProviderError("服务商返回的任务状态无法识别") from e
+    if status == "succeeded":
+        if not output.get("video_url"):
+            return VideoPoll("failed", error="服务商没有返回视频地址")
+        return VideoPoll("succeeded", video_url=output["video_url"])
+    if status == "failed":
+        detail = output.get("message") or output.get("code") or output.get("task_status")
+        return VideoPoll("failed", error=f"服务商返回：{detail}")
+    return VideoPoll("running")

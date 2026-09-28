@@ -13,6 +13,7 @@ import { getErrorMessage } from "@/lib/api";
 import { READER_BACKGROUND, StageRoundButton, stageSubmitButtonClass } from "@/pages/stage/common";
 import { finishBookOpening } from "@/pages/stage/book-opening";
 import { FlipBook, type FlipBookHandle } from "@/pages/stage/flip-book";
+import { CoverVideo } from "@/pages/stage/cover-video";
 import { AutoReadToggle, ReadAloudSpeakers } from "@/pages/stage/read-aloud";
 import { useReadAloud } from "@/pages/stage/use-read-aloud";
 
@@ -42,6 +43,10 @@ export default function ReaderPage() {
   const [closing, setClosing] = useState(false);
   const units = book?.units ?? NO_UNITS;
   const hasAudio = units.some((u) => u.audio_url);
+  // 封面动画（D96）：阅读页的第 1 页就是书架封面时，封面翻开前也在动
+  const coverVideoUrl =
+    book?.cover_video_url && book.cover_page_index === 0 ? book.cover_video_url : null;
+  const coverSlot = slots?.indexOf(0) ?? -1;
   const readAloud = useReadAloud({
     units,
     readOrder: book?.read_order ?? "left_first",
@@ -100,14 +105,26 @@ export default function ReaderPage() {
           onFlippingChange={setFlipping}
           onReady={onReady}
           overlay={
-            hasAudio
+            hasAudio || coverVideoUrl
               ? (layout) => (
-                  <ReadAloudSpeakers
-                    layout={layout}
-                    units={units}
-                    slots={slots}
-                    flipping={flipping}
-                  />
+                  <>
+                    {coverVideoUrl && coverSlot !== -1 && (
+                      <CoverVideo
+                        src={coverVideoUrl}
+                        active={!flipping}
+                        className="absolute top-0 h-full object-cover"
+                        style={{ left: coverSlot * layout.pageWidth, width: layout.pageWidth }}
+                      />
+                    )}
+                    {hasAudio && (
+                      <ReadAloudSpeakers
+                        layout={layout}
+                        units={units}
+                        slots={slots}
+                        flipping={flipping}
+                      />
+                    )}
+                  </>
                 )
               : undefined
           }

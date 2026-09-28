@@ -16,6 +16,7 @@ from app.ai.book_schemas import (
     CharacterOut,
     CharacterUpdate,
     CharacterVoiceOut,
+    CoverVideoOut,
     GenerateAllOut,
     JobEnqueuedOut,
     SpreadModeUpdate,
@@ -38,6 +39,7 @@ from app.ai.spreads import (
     unit_to_out,
     units_in_spread,
 )
+from app.ai.video import cover_frame_key, cover_source_hash
 from app.ai.voices import current_voice, voice_state
 from app.books import storage
 from app.clock import utcnow
@@ -113,6 +115,29 @@ def _current_audio_hash(unit: AiUnit, characters: Sequence[Character], tts: Capa
         return None
 
 
+def _cover_out(db: Session, book: Book) -> CoverVideoOut:
+    has_video = book.cover_video_source_hash is not None
+    video = load_active_config(db, "video")
+    resolution = str(video.options.get("resolution") or "720P")
+    return CoverVideoOut(
+        motion_prompt=book.cover_motion_prompt,
+        status=book.cover_video_status,  # type: ignore[arg-type]
+        error=book.cover_video_error,
+        video_url=(
+            f"/api/admin/books/{book.id}/ai/cover-video?v={book.cover_video_version}"
+            if has_video
+            else None
+        ),
+        resolution=book.cover_video_resolution,
+        outdated=has_video
+        and book.cover_video_source_hash
+        != cover_source_hash(book.cover_motion_prompt, video, resolution),
+        frame_changed=has_video
+        and book.cover_video_frame != cover_frame_key(book.cover_page_index, book.assets_version),
+        enabled_at=book.cover_video_enabled_at,
+    )
+
+
 def _book_ai_out(db: Session, book: Book) -> BookAiOut:
     active_jobs = [
         AiJobOut(
@@ -130,7 +155,7 @@ def _book_ai_out(db: Session, book: Book) -> BookAiOut:
             finished_at=j.finished_at,
         )
         for j in book.jobs
-        if j.status in ("queued", "running")
+        if j.status in ("queued", "running", "waiting")
     ]
     tts = load_active_config(db, "tts")
     return BookAiOut(
@@ -150,6 +175,7 @@ def _book_ai_out(db: Session, book: Book) -> BookAiOut:
             {u.id: _current_audio_hash(u, book.characters, tts) for u in book.ai_units},
         ),
         running_jobs=active_jobs,
+        cover=_cover_out(db, book),
     )
 
 
@@ -171,6 +197,8 @@ def update_book_ai(
         book.story = body.story
     if body.read_order is not None:
         book.read_order = body.read_order
+    if body.cover_motion_prompt is not None:
+        book.cover_motion_prompt = body.cover_motion_prompt.strip() or None
     db.commit()
     db.refresh(book)
     return _book_ai_out(db, book)
@@ -530,7 +558,7 @@ def generate_all(
     # 动画（video）在 A4 加入
     type: Literal["audio"] = Query(),
 ) -> GenerateAllOut:
-    """把需要生成的单元（未生成、失败或台词 / 音色已改）都放进队列（docs/06 第 6.6 节）。"""
+    """把需要生成的单元（未生成、失败或台词 / 音色已改）都放进队列（docs/06 第 6.7 节）。"""
     book = _get_book_with_ai(db, book_id)
     tts = _check_tts_credentials(db, settings)
 
@@ -596,3 +624,73 @@ def get_unit_audio(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: 
     return FileResponse(
         path, media_type="audio/mp4", headers={"Cache-Control": MEDIA_CACHE_CONTROL}
     )
+
+
+# ---------- 封面动画（D96） ----------
+
+
+@router.post("/admin/books/{book_id}/ai/cover-video", status_code=status.HTTP_202_ACCEPTED)
+def generate_cover_video(
+    book_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+) -> JobEnqueuedOut:
+    """用当前封面和动作描述生成（或重新生成）封面动画。"""
+    book = _get_book_with_ai(db, book_id)
+    if book.processing_status != "ready":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "绘本尚未拆页完成")
+    video = load_active_config(db, "video")
+    missing = missing_credentials(
+        "video", video.provider, load_credentials(settings, video.provider)
+    )
+    if missing:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"请先在 .env 中设置 {'、'.join(missing)}")
+
+    existing = db.scalar(
+        select(Job).where(
+            Job.book_id == book_id,
+            Job.type == "ai_cover_video",
+            Job.status.in_(["queued", "running", "waiting"]),
+        )
+    )
+    if existing:
+        return JobEnqueuedOut(job_id=existing.id, status=existing.status)
+    book.cover_video_status = "queued"
+    book.cover_video_error = None
+    job = Job(type="ai_cover_video", book_id=book_id)
+    db.add(job)
+    db.commit()
+    return JobEnqueuedOut(job_id=job.id, status="queued")
+
+
+@router.get("/admin/books/{book_id}/ai/cover-video", response_class=FileResponse)
+def get_cover_video_preview(
+    book_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+):
+    book = db.get(Book, book_id)
+    path = storage.ai_cover_video_path(settings, book_id)
+    if book is None or book.cover_video_source_hash is None or not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "封面动画不存在")
+    return FileResponse(
+        path, media_type="video/mp4", headers={"Cache-Control": MEDIA_CACHE_CONTROL}
+    )
+
+
+@router.put("/admin/books/{book_id}/ai/cover-video/enabled")
+def enable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+    """启用封面动画：读者在书架和阅读页封面上看到它（与 Dance Ready! 相互独立）。"""
+    book = _get_book_with_ai(db, book_id)
+    if book.cover_video_source_hash is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "还没有生成封面动画")
+    if book.cover_video_frame != cover_frame_key(book.cover_page_index, book.assets_version):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "封面已更换，请先重新生成封面动画")
+    if book.cover_video_enabled_at is None:
+        book.cover_video_enabled_at = utcnow()
+        db.commit()
+    return _book_ai_out(db, book)
+
+
+@router.delete("/admin/books/{book_id}/ai/cover-video/enabled")
+def disable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+    book = _get_book_with_ai(db, book_id)
+    book.cover_video_enabled_at = None
+    db.commit()
+    return _book_ai_out(db, book)

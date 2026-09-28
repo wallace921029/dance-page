@@ -273,3 +273,46 @@ def draft_unit_content(
         result["motion_prompt"] = None
 
     return result
+
+
+COVER_MOTION_MAX_TOKENS = 512
+
+
+def describe_cover_motion(
+    cover_path: Path,
+    story: str | None,
+    character_names: list[str],
+    config: CapabilityConfig,
+    api_key: str,
+) -> str:
+    """看封面写封面动画的动作描述（D96）：点名画面里的角色，各写一个轻柔但看得见的小动作。"""
+    names = "、".join(character_names) or "（未知）"
+    prompt = f"""你是儿童绘本的动画导演。附图是一本绘本的封面，要把它做成"像魔法报纸上会动的照片"：
+画还是这张画，只有里面的角色做轻柔但清楚看得见的小动作，然后回到原样，循环播放。
+故事梗概：{story or "（无）"}
+已知角色：{names}
+
+请写一句动作描述：
+1. 点名画面里的 1–3 个角色（用已知角色名；不知道名字就用"兔子""小老鼠"这样的称呼）；
+2. 每个角色一个具体的小动作，如眨眨眼、耳朵抖一抖、轻轻点头、尾巴摆动、
+   胡须颤动、手指轻挠、衣角飘动；
+3. 角色不走动、不离开原位，背景、书名和其他文字都不动；
+4. 50 字以内，中文。
+按 JSON 返回：{{"motion": "……"}}"""
+    content: list[dict[str, Any]] = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": encode_page_image(cover_path)}},
+    ]
+    with providers.http_client() as client:
+        result = _execute_vision_completion(
+            client,
+            config,
+            api_key,
+            content,
+            timeout=VISION_DRAFT_TIMEOUT,
+            max_tokens=COVER_MOTION_MAX_TOKENS,
+        )
+    motion = str(result.get("motion") or "").strip()
+    if not motion:
+        raise ProviderError("大模型没有写出封面的动作描述")
+    return motion

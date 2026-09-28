@@ -3,7 +3,13 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
-from app.books.service import cover_url, latest_job, page_url, reader_audio_url
+from app.books.service import (
+    cover_url,
+    latest_job,
+    page_url,
+    reader_audio_url,
+    reader_cover_video_url,
+)
 from app.models import Book
 
 Language = Literal["zh", "en"]
@@ -48,6 +54,8 @@ class ShelfBookOut(BaseModel):
     # 管理员确认过的 AI 内容（D61、D67）：有朗读的书在书名前显示音乐符号（D70）
     voice_ready: bool
     dance_ready: bool
+    # 封面动画（D96）：像魔法报纸上的照片，在书架和阅读页封面上循环播放
+    cover_video_url: str | None
 
     @classmethod
     def of(
@@ -64,6 +72,7 @@ class ShelfBookOut(BaseModel):
             favorited_at=favorited_at,
             voice_ready=book.voice_ready_at is not None,
             dance_ready=book.dance_ready_at is not None,
+            cover_video_url=reader_cover_video_url(book),
         )
 
 
@@ -98,6 +107,8 @@ class ReaderBookOut(ShelfBookOut):
     # 跨页大图从第几页开始两两配对（D43），阅读端对开显示时使用
     spread_start_page: SpreadStartPage
     pages: list[PageOut]
+    # 书架封面用的是哪一页；阅读页只在它是第 1 页时播放封面动画
+    cover_page_index: int
     # 对开时"分别生成"的两页的朗读顺序（D69）
     read_order: Literal["left_first", "right_first"]
     units: list[ReaderUnitOut]
@@ -114,6 +125,7 @@ class ReaderBookOut(ShelfBookOut):
             language=book.language,
             spread_start_page=book.spread_start_page,
             pages=_pages(book),
+            cover_page_index=book.cover_page_index,
             read_order=book.read_order,
             units=_reader_units(book),
         )

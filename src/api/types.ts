@@ -92,6 +92,8 @@ export interface ShelfBook {
   /** 管理员确认过朗读（D70：书名前显示音乐符号） */
   voice_ready: boolean;
   dance_ready: boolean;
+  /** 已启用的封面动画（D96），在书架和阅读页封面上循环播放 */
+  cover_video_url: string | null;
 }
 
 /** 一个生成单元的朗读 / 动画；只有确认过的那一类产物才会出现 */
@@ -109,6 +111,8 @@ export interface ReaderBook extends ShelfBook {
   language: Language | null;
   spread_start_page: SpreadStartPage;
   pages: BookPage[];
+  /** 书架封面用的是哪一页；阅读页只在它是第 1 页时播放封面动画 */
+  cover_page_index: number;
   /** 对开时"分别生成"的两页的朗读顺序（D69） */
   read_order: ReadOrder;
   units: ReaderUnit[];
@@ -285,13 +289,29 @@ export interface AiJob {
   book_id: string;
   unit_id: string | null;
   character_id: number | null;
-  status: "queued" | "running" | "done" | "failed";
+  /** waiting：视频已提交给服务商，等待查询 */
+  status: "queued" | "running" | "waiting" | "done" | "failed";
   progress_done: number;
   progress_total: number;
   error: string | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+}
+
+/** 封面动画（D96） */
+export interface CoverVideo {
+  motion_prompt: string | null;
+  status: AiTaskStatus;
+  error: string | null;
+  /** 已生成的视频（后台预览） */
+  video_url: string | null;
+  resolution: string | null;
+  /** 动作描述、模型或清晰度在生成之后改过 */
+  outdated: boolean;
+  /** 生成之后换了封面，旧动画对不上，读者看不到 */
+  frame_changed: boolean;
+  enabled_at: string | null;
 }
 
 export interface BookAi {
@@ -302,6 +322,7 @@ export interface BookAi {
   characters: Character[];
   spreads: Spread[];
   running_jobs: AiJob[];
+  cover: CoverVideo;
 }
 
 export interface CharacterCreateInput {
@@ -318,6 +339,7 @@ export interface CharacterUpdateInput {
 }
 
 export interface BookAiUpdateInput {
+  cover_motion_prompt?: string | null;
   story?: string | null;
   read_order?: "left_first" | "right_first" | null;
 }

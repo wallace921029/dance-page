@@ -125,6 +125,22 @@ class AiJobOut(BaseModel):
     finished_at: datetime | None
 
 
+class CoverVideoOut(BaseModel):
+    """封面动画（D96）"""
+
+    motion_prompt: str | None
+    status: Literal["none", "queued", "running", "ready", "failed"]
+    error: str | None
+    # 已生成的视频（后台预览）；重新生成期间仍可看旧的
+    video_url: str | None
+    resolution: str | None
+    # 动作描述、模型或清晰度在生成之后改过
+    outdated: bool
+    # 生成之后换了封面（或重新拆页），旧动画对不上，读者看不到
+    frame_changed: bool
+    enabled_at: datetime | None
+
+
 class BookAiOut(BaseModel):
     story: str | None
     read_order: Literal["left_first", "right_first"]
@@ -133,11 +149,13 @@ class BookAiOut(BaseModel):
     characters: list[CharacterOut]
     spreads: list[SpreadOut]
     running_jobs: list[AiJobOut]
+    cover: CoverVideoOut
 
 
 class BookAiUpdate(BaseModel):
     story: str | None = None
     read_order: Literal["left_first", "right_first"] | None = None
+    cover_motion_prompt: str | None = None
 
 
 class SpreadModeUpdate(BaseModel):

@@ -7,6 +7,7 @@ import {
   Combine,
   Edit2,
   Film,
+  Maximize2,
   MoreHorizontal,
   Play,
   Plus,
@@ -16,6 +17,7 @@ import {
   Square,
   Trash2,
   Volume2,
+  Wand2,
 } from "lucide-react";
 import { cn } from "cn";
 import {
@@ -26,8 +28,10 @@ import {
   useDesignVoice,
   useDraftAiUnit,
   useGenerateAllAudio,
+  useGenerateCoverVideo,
   useGenerateSpreadAudio,
   useGenerateUnitAudio,
+  useSetCoverVideoEnabled,
   useSetVoiceReady,
   useUpdateSpreadSwitches,
   useUpdateAiUnit,
@@ -42,6 +46,7 @@ import type {
   BookAi,
   BookPage,
   Character,
+  CoverVideo,
   Spread,
 } from "@/api/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -163,6 +168,9 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
 
       {/* 故事与角色卡片 */}
       <StoryAndCharactersCard bookId={book.id} bookAi={bookAi} />
+
+      {/* 封面动画（D96）：与朗读、开页动画相互独立 */}
+      <CoverAnimationCard book={book} bookAi={bookAi} />
 
       {/* 各类 AI 产物的进度和一键操作，是下方开页列表的总览（A4 在这里加"动画"一行） */}
       {analyzed && (
@@ -393,6 +401,251 @@ function VoiceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi 
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+// ============================================================================
+// 封面动画（D96）：像魔法报纸上的照片，封面里的角色轻轻动
+// ============================================================================
+
+function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: BookAi }) {
+  const cover = bookAi.cover;
+  const updateAi = useUpdateBookAi(book.id);
+  const generate = useGenerateCoverVideo(book.id);
+  const setEnabled = useSetCoverVideoEnabled(book.id);
+  const [motion, setMotion] = useState(cover.motion_prompt ?? "");
+  const [savedMotion, setSavedMotion] = useState(cover.motion_prompt ?? "");
+  // 服务器上的描述变了（如分析整本故事填了草稿）时，同步到输入框
+  if ((cover.motion_prompt ?? "") !== savedMotion) {
+    setSavedMotion(cover.motion_prompt ?? "");
+    setMotion(cover.motion_prompt ?? "");
+  }
+  const isDirty = motion.trim() !== savedMotion.trim();
+  const isBusy = generate.isPending || cover.status === "queued" || cover.status === "running";
+  const hasVideo = cover.video_url !== null;
+  const isEnabled = cover.enabled_at !== null;
+
+  const handleSave = () => {
+    updateAi.mutate(
+      { cover_motion_prompt: motion.trim() },
+      {
+        onSuccess: () => toast.add({ title: "已保存动作描述", type: "success" }),
+        onError: (err) =>
+          toast.add({ title: "保存失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+  };
+
+  const handleGenerate = () => {
+    generate.mutate(undefined, {
+      onSuccess: () =>
+        toast.add({
+          title: "封面动画已提交",
+          description: "服务商生成一段 5 秒的视频，约需 1–3 分钟…",
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "提交封面动画失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  const handleEnabled = (enabled: boolean) => {
+    setEnabled.mutate(enabled, {
+      onSuccess: () =>
+        toast.add({
+          title: enabled ? "已启用封面动画" : "已停用封面动画",
+          description: enabled ? "读者在书架和阅读页封面上会看到它" : undefined,
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "操作失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Wand2 className="size-4 text-primary" />
+          封面动画
+        </CardTitle>
+        <CardDescription>
+          像魔法报纸上会动的照片：封面里的角色轻轻眨眼、呼吸，画面其余部分不变，循环播放。
+        </CardDescription>
+        <CardAction>
+          <Button
+            size="sm"
+            variant={hasVideo ? "outline" : "default"}
+            onClick={handleGenerate}
+            disabled={isBusy || isDirty || book.processing_status !== "ready"}
+            title={isDirty ? "请先保存动作描述" : undefined}
+          >
+            {isBusy ? <Spinner className="size-4" /> : <Wand2 className="size-4" />}
+            {isBusy ? "生成中…" : hasVideo ? "重新生成" : "生成封面动画"}
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 sm:flex-row">
+        {/* 预览：生成后循环播放，否则显示静态封面 */}
+        <div className="w-48 shrink-0 space-y-1.5 self-center sm:self-start">
+          {hasVideo ? (
+            <>
+              <div className="relative">
+                <video
+                  key={cover.video_url}
+                  src={cover.video_url!}
+                  poster={book.cover_url ?? undefined}
+                  className="w-full rounded-md bg-muted ring-1 ring-border"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+                <Badge className="pointer-events-none absolute top-1.5 left-1.5 bg-black/60 text-[10px] text-white">
+                  <Play className="size-2.5" />
+                  循环播放中
+                </Badge>
+              </div>
+              <CoverVideoDialog url={cover.video_url!} poster={book.cover_url} />
+            </>
+          ) : book.cover_url ? (
+            <img
+              src={book.cover_url}
+              alt="封面"
+              className="w-full rounded-md bg-muted ring-1 ring-border"
+            />
+          ) : null}
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-medium">动作描述（画面里谁、怎样轻轻动）</span>
+              {isDirty && (
+                <Button size="xs" onClick={handleSave} disabled={updateAi.isPending}>
+                  {updateAi.isPending && <Spinner className="size-3" />}
+                  保存
+                </Button>
+              )}
+            </div>
+            <Textarea
+              value={motion}
+              onChange={(e) => setMotion(e.target.value)}
+              placeholder="留空则由 AI 看封面自动写。例如：兔子波西眨眨眼、手指轻挠下巴，小老鼠皮普的尾巴轻轻摆动"
+              className="min-h-[60px] resize-y text-xs"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <CoverStatusBadge status={cover.status} />
+            {hasVideo && cover.resolution && (
+              <span className="text-xs text-muted-foreground">5 秒 · {cover.resolution}</span>
+            )}
+            {hasVideo && cover.frame_changed && (
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+              >
+                封面已更换，需要重新生成
+              </Badge>
+            )}
+            {hasVideo && !cover.frame_changed && cover.outdated && (
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+                title="动作描述、模型或清晰度在生成之后改过"
+              >
+                需要重新生成
+              </Badge>
+            )}
+          </div>
+
+          {cover.status === "failed" && cover.error && (
+            <Alert variant="destructive" className="px-2 py-1.5 text-xs">
+              <CircleAlert />
+              <AlertDescription className="text-xs">{cover.error}</AlertDescription>
+            </Alert>
+          )}
+
+          <label
+            className={cn(
+              "flex w-fit items-center gap-2 text-sm",
+              hasVideo && !cover.frame_changed ? "cursor-pointer" : "text-muted-foreground",
+            )}
+          >
+            <Switch
+              checked={isEnabled}
+              onCheckedChange={handleEnabled}
+              disabled={
+                setEnabled.isPending || (!isEnabled && (!hasVideo || cover.frame_changed))
+              }
+            />
+            在书架和阅读页封面上播放
+          </label>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 放大预览封面动画（带播放控制），小图里不容易看清动作 */
+function CoverVideoDialog({ url, poster }: { url: string; poster: string | null }) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <Button size="xs" variant="outline" className="w-full">
+            <Maximize2 className="size-3" />
+            放大预览
+          </Button>
+        }
+      />
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>封面动画预览</DialogTitle>
+          <DialogDescription>5 秒一段循环播放；首尾帧就是封面原图，所以接缝处看不出跳变。</DialogDescription>
+        </DialogHeader>
+        <video
+          src={url}
+          poster={poster ?? undefined}
+          className="max-h-[70vh] w-full rounded-md bg-muted object-contain"
+          autoPlay
+          loop
+          muted
+          playsInline
+          controls
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CoverStatusBadge({ status }: { status: CoverVideo["status"] }) {
+  if (status === "queued" || status === "running") {
+    return (
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
+        {status === "queued" ? "排队中" : "生成中，约需 1–3 分钟"}
+      </Badge>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <Badge variant="destructive" className="text-[10px]">
+        生成失败
+      </Badge>
+    );
+  }
+  if (status === "ready") {
+    return (
+      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">
+        已生成
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+      未生成
+    </Badge>
   );
 }
 

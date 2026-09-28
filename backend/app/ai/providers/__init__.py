@@ -1,6 +1,6 @@
 """各服务商的适配器（docs/06-ai-tech-design.md 第 1、2 节）。
 
-连接测试、列模型、设计音色、朗读合成经由这里分派到各家适配器；视频在 A4 按同样的方式加进来。
+连接测试、列模型、设计音色、朗读合成、首尾帧视频经由这里分派到各家适配器。
 """
 
 from dataclasses import dataclass
@@ -113,3 +113,60 @@ def synthesize(
             )
     except httpx.HTTPError as e:
         raise ProviderError(_network_error(e)) from e
+
+
+@dataclass
+class VideoPoll:
+    # running：还在排队或生成；succeeded：可以下载；failed：失败（error 为原因）
+    status: Literal["running", "succeeded", "failed"]
+    video_url: str | None = None
+    error: str | None = None
+
+
+# 下载生成好的视频（结果链接 24 小时有效）
+DOWNLOAD_TIMEOUT = 120.0
+
+
+def submit_video(
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    frame_jpeg: bytes,
+    prompt: str,
+    negative_prompt: str,
+    resolution: str,
+) -> str:
+    """提交首尾帧视频任务（首帧和尾帧都用同一张图，视频能无缝循环），返回服务商的任务 ID。"""
+    try:
+        with http_client() as client:
+            return _adapter(config.provider).submit_video(
+                client,
+                config,
+                credentials,
+                frame_jpeg=frame_jpeg,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                resolution=resolution,
+            )
+    except httpx.HTTPError as e:
+        raise ProviderError(_network_error(e)) from e
+
+
+def poll_video(config: CapabilityConfig, credentials: dict[str, str], task_id: str) -> VideoPoll:
+    try:
+        with http_client() as client:
+            return _adapter(config.provider).poll_video(client, config, credentials, task_id)
+    except httpx.HTTPError as e:
+        raise ProviderError(_network_error(e)) from e
+
+
+def download(url: str) -> bytes:
+    """下载服务商生成的文件（临时链接，不需要 Key）。"""
+    try:
+        with http_client() as client:
+            res = client.get(url, timeout=DOWNLOAD_TIMEOUT)
+    except httpx.HTTPError as e:
+        raise ProviderError(_network_error(e)) from e
+    if res.status_code != 200:
+        raise ProviderError(f"下载生成结果失败：HTTP {res.status_code}")
+    return res.content

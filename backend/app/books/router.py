@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.books import storage
 from app.books.schemas import ReaderBookOut, ShelfBookOut
+from app.books.service import reader_cover_video_url
 from app.deps import AppSettings, CurrentUser, DbSession
 from app.models import AiUnit, Book, Favorite, Page, User
 
@@ -119,4 +120,16 @@ def get_unit_audio(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "朗读不存在")
     return FileResponse(
         path, media_type="audio/mp4", headers={"Cache-Control": IMAGE_CACHE_CONTROL}
+    )
+
+
+@router.get("/{book_id}/cover-video", response_class=FileResponse)
+def get_cover_video(book_id: str, user: CurrentUser, db: DbSession, settings: AppSettings):
+    """已启用的封面动画（D96）。FileResponse 支持分段请求，iPad Safari 播放视频需要。"""
+    book = _readable_book(db, book_id, user)
+    path = storage.ai_cover_video_path(settings, book_id)
+    if reader_cover_video_url(book) is None or not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "封面动画不存在")
+    return FileResponse(
+        path, media_type="video/mp4", headers={"Cache-Control": IMAGE_CACHE_CONTROL}
     )

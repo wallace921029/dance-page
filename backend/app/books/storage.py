@@ -54,3 +54,8 @@ def delete_ai_unit_files(settings: Settings, book_id: str, unit_id: str) -> None
 
 def delete_ai_voice_files(settings: Settings, book_id: str) -> None:
     shutil.rmtree(ai_dir(settings, book_id) / "voices", ignore_errors=True)
+
+
+def ai_cover_video_path(settings: Settings, book_id: str) -> Path:
+    """封面动画（D96）"""
+    return ai_dir(settings, book_id) / "video" / "cover.mp4"

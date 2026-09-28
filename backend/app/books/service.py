@@ -40,3 +40,15 @@ def page_url(book: Book, index: int) -> str:
 
 def reader_audio_url(book: Book, unit: AiUnit) -> str:
     return f"/api/books/{book.id}/ai/audio/{unit.id}?v={unit.audio_version}"
+
+
+def reader_cover_video_url(book: Book) -> str | None:
+    """已启用、且与当前封面对得上的封面动画（D96）"""
+    frame = f"{book.cover_page_index}:{book.assets_version}"
+    if (
+        book.cover_video_enabled_at is None
+        or book.cover_video_source_hash is None
+        or book.cover_video_frame != frame
+    ):
+        return None
+    return f"/api/books/{book.id}/cover-video?v={book.cover_video_version}"

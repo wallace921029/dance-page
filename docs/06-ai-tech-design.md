@@ -83,6 +83,11 @@ books 新增
   story                            # 整本故事（大模型草稿，管理员可改）
   read_order ('left_first' | 'right_first'，默认 left_first，D69)
   voice_ready_at, dance_ready_at    # 为空表示未确认；两者相互独立（D67）
+  cover_motion_prompt               # 封面动画的动作描述（D96）
+  cover_video_status / _error / _version / _resolution
+  cover_video_source_hash          # "动作描述 + 模型 + 清晰度"指纹，不一致显示"需要重新生成"
+  cover_video_frame                # 生成时的封面 "{cover_page_index}:{assets_version}"，换封面后读者不再看到
+  cover_video_enabled_at           # 启用后读者可见；与 dance_ready_at 相互独立
 
 characters                         # 故事里的角色，含旁白
   id, book_id, name, is_narrator, voice_prompt, sort_order
@@ -107,8 +112,10 @@ ai_units                           # 生成单元：单页，或合并的左右�
 
 jobs 新增
   unit_id, character_id（可空）
-  type 新增：'ai_analyze_book' | 'ai_draft_unit' | 'ai_voice' | 'ai_tts_unit' | 'ai_video_unit'
+  type 新增：'ai_analyze_book' | 'ai_draft_unit' | 'ai_voice' | 'ai_tts_unit' | 'ai_cover_video' | 'ai_video_unit'
   remote_task_id, next_poll_at     # 视频异步任务用
+  payload（JSON）                  # 任务参数，如视频提交时用的服务商、指纹（D96）
+  status 新增 'waiting'            # 视频已提交给服务商，到 next_poll_at 再查询
 ```
 
 - **开页与生成单元**：开页的划分和阅读端对开完全一致（封面单独；`spread_start_page = 3` 时第 2 页单独）。"分别生成"= 两个单页单元，"合并生成"= 一个两页单元。切换模式时删除旧单元（连同已生成的文件）、建新单元。横版书每页一个单元，没有合并（D75）。
@@ -121,6 +128,7 @@ jobs 新增
 books/{book_id}/ai/
 ├── audio/{unit_id}.m4a          # 一个单元一段朗读（AAC）
 ├── video/{unit_id}.mp4          # 一个单元一段视频（H.264，去掉音轨）
+├── video/cover.mp4             # 封面动画（D96）
 └── voices/{character_voice_id}.wav   # 音色试听，仅后台使用
 ```
 
@@ -162,9 +170,18 @@ books/{book_id}/ai/
 2. 提示词 = 固定模板 + 动作描述，例如："镜头固定不动，背景和其他物体保持静止，保持原画的绘本画风、色彩和线条，画面中的文字不变。只有〔大怪兽慢慢眨眼，尾巴轻轻摆动〕，动作轻柔缓慢，最后回到初始姿态。"外加反向提示词（镜头移动、缩放、变形、画风变化、新增物体、文字抖动）。
 3. 提交异步任务，记下 `remote_task_id`；Worker 每 15 秒查询一次，完成后立即下载（结果链接 24 小时有效），去掉音轨、把索引移到文件开头（便于边下边播）后保存。
 
-### 6.6 Worker 调度
+### 6.6 封面动画（`ai_cover_video`，D96）
 
-- 现在的 Worker 一次只做一个任务。视频任务一段要几分钟，不能让它堵住其他任务（如新上传的 PDF 拆页），所以视频任务拆成"提交"和"查询"两步：提交后任务进入等待状态，Worker 继续处理别的任务，到 `next_poll_at` 再查询。同时在服务商那边排队的视频任务最多 3 个（可配置）。
+- 与 6.5 同一套做法，首尾帧都用当前封面页的原图；提示词模板是"像一张有魔法的会动的照片：〔动作描述〕，角色的动作轻柔自然、清楚可见，留在原位不走动"，反向提示词含"画面静止不动"。**不能把"幅度很小"强调过头**：首尾帧相同时模型容易干脆不动（D97 实测几乎静止）。
+- 动作描述要点名具体角色和动作："分析整本故事"按封面页填草稿（管理员填过的不覆盖）；生成时仍为空，就先让视觉模型看封面写一句（点名 1–3 个角色，各一个看得见的小动作），存为草稿后再提交（D97）。
+- **图片不公开**：百炼的做法与 SDK 传本地文件相同——先 `GET /uploads?action=getPolicy` 取上传凭证，把首帧 JPEG 直传到账号下的临时 OSS，得到 `oss://` 地址；提交 `POST /services/aigc/image2video/video-synthesis` 时带 `X-DashScope-Async: enable` 和 `X-DashScope-OssResourceResolve: enable`；`GET /tasks/{task_id}` 查询。万相首尾帧时长固定 5 秒，清晰度用"AI 配置"里的默认值，`prompt_extend=false`。
+- 火山暂不支持（A0 实测账号的视频模型不支持首尾帧），提示切换到百炼。
+- 阅读端只在已启用、且生成时的封面与当前封面一致时拿到视频地址；书架封面、阅读页第 1 页（封面是第 1 页时）上叠 `<video muted playsinline loop>`，只播看得见的，开始播放后淡入，翻页时立即隐藏。视频接口支持分段请求（iPad Safari 需要）。
+
+### 6.7 Worker 调度
+
+- 现在的 Worker 一次只做一个任务。视频任务一段要几分钟，不能让它堵住其他任务（如新上传的 PDF 拆页），所以视频任务拆成"提交"和"查询"两步：提交后任务进入等待状态（`waiting`），Worker 继续处理别的任务，到 `next_poll_at` 再查询（每 15 秒）。同时在服务商那边排队的视频任务最多 3 个，满了时新的视频任务先不提交，其他任务照常执行。
+- 查询出错（如网络抖动）不算失败，稍后再查；提交后 30 分钟还没好才算超时失败。Worker 重启时已提交的任务继续查询、不重新提交（避免重复付费）。（D96 已实现）
 - **失败不自动重试**（D65）：任何一步出错即把任务和单元标记为失败，记录中文错误原因（如"服务商返回：余额不足"），管理员点"重试"重新入队。
 - "全部生成"= 按每个开页已设好的方式，把需要生成（未生成、失败或草稿已修改）的单元都放进队列；关闭了朗读 / 动画的开页跳过（D95）。
 
@@ -192,12 +209,14 @@ books/{book_id}/ai/
 | POST | `/api/admin/ai/units/{uid}/audio` | 生成朗读 |
 | GET | `/api/admin/ai/units/{uid}/audio` | 朗读音频（`.m4a`）后台试听，地址带 `?v=audio_version` |
 | POST | `/api/admin/ai/units/{uid}/video` | 生成动画（可临时指定时长、清晰度，D79） |
+| POST / GET | `/api/admin/books/{id}/ai/cover-video` | 生成封面动画 / 后台预览（D96） |
+| PUT / DELETE | `/api/admin/books/{id}/ai/cover-video/enabled` | 启用 / 停用封面动画 |
 | POST | `/api/admin/books/{id}/ai/generate-all` | 全部生成（朗读或动画） |
 | PUT / DELETE | `/api/admin/books/{id}/ai/voice-ready`、`/dance-ready` | 确认 / 取消 Voice Ready、Dance Ready! |
 
 **阅读端**（`require_user`）
 
-- `GET /api/books`：每本书加 `voice_ready`、`dance_ready`（书架标识，D70）。
+- `GET /api/books`：每本书加 `voice_ready`、`dance_ready`（书架标识，D70）和 `cover_video_url`（已启用的封面动画，D96）；`GET /api/books/{id}/cover-video` 返回封面动画。
 - `GET /api/books/{id}`：加 `read_order` 和 `units`：`[{pages: [4, 5], audio_url, audio_duration_ms, video_url}]`。只有已确认的那一类产物才会出现。
 - 音频、视频文件：`/api/books/{id}/ai/audio/{uid}`、`/api/books/{id}/ai/video/{uid}`。
 
@@ -240,4 +259,5 @@ books/{book_id}/ai/
 | A0 试验 | 用样书和 `.env` 里的 Key 验证：故事分析、音色设计 / 选择、逐行合成、首尾帧视频（含一个合并开页）。试验脚本读取同一份配置 | ✅ 验证通过（D88），结论已沉淀，输出样本在 `samples/ai-trial/` |
 | A2 故事与草稿 | 分析整本故事、角色、开页 / 单元、草稿编辑、"页面"模块界面 | ✅ 一本书能生成并编辑全部草稿（D89） |
 | A3 朗读（第一步） | ✅ 已完成（D91–D94，iPad 真机待验证）。音色设计 / 选择与试听、逐行合成、Voice Ready、阅读端朗读按钮与自动朗读、书架音乐符号 | 孩子在 iPad 上能听整本书的多角色朗读 |
+| 封面动画（插入，D96） | ✅ 封面首尾帧视频、提交 / 查询两步的 Worker 调度（A4 复用）、后台"封面动画"卡片、书架与阅读页封面播放 | 书架上的封面像魔法照片一样轻轻动 |
 | A4 动画（第二步） | ← 下一步。视频任务提交与查询、Dance Ready!、阅读端视频播放、剧场招牌 | 开页里的主角在 iPad 上循环动起来 |

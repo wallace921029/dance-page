@@ -229,7 +229,8 @@ export function FlipBook({
     window.addEventListener("resize", alignStageBackdrops);
 
     const onFlip = (index: number) => {
-      const slots = visibleSlots(items, index, isDouble);
+      // 对开时按 (0,1)(2,3)… 配对，index 可能是右页（如重建时从 startPage 开始），先对齐到左页
+      const slots = visibleSlots(items, isDouble ? index - (index % 2) : index, isDouble);
       const visible = slots.filter((page): page is number => page !== null);
       currentPageRef.current = visible[0] ?? 0;
       onVisibleChangeRef.current(visible, slots);

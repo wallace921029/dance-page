@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult
+from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult, VideoPoll
 from app.ai.providers.common import chat_ping, describe_error
 from app.ai.settings import CapabilityConfig
 
@@ -104,3 +104,28 @@ def synthesize(
     voice: str,
 ) -> bytes:
     raise ProviderError(_TTS_NOT_READY)
+
+
+_VIDEO_NOT_READY = (
+    "当前动画视频服务商是火山引擎，还不支持首尾帧动画（A0 实测账号开通的模型不支持首尾帧），"
+    "请在「AI 配置」中把动画视频切换到阿里云百炼 wan2.2-kf2v-flash"
+)
+
+
+def submit_video(
+    client: httpx.Client,
+    config: CapabilityConfig,
+    credentials: dict[str, str],
+    *,
+    frame_jpeg: bytes,
+    prompt: str,
+    negative_prompt: str,
+    resolution: str,
+) -> str:
+    raise ProviderError(_VIDEO_NOT_READY)
+
+
+def poll_video(
+    client: httpx.Client, config: CapabilityConfig, credentials: dict[str, str], task_id: str
+) -> VideoPoll:
+    raise ProviderError(_VIDEO_NOT_READY)
