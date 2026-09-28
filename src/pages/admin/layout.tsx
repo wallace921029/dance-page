@@ -24,7 +24,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-svh bg-muted/40">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
           <span className="font-semibold">{APP_NAME} 管理后台</span>
           <NavigationMenu>

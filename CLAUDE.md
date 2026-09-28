@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Phase-1 features are built: accounts/invites/readers (M1), PDF upload + rendering worker + admin UI (M2), and the reader side — register page, "small theater" shelf and page-flip reading page (M3). Remaining: M4 polish/deployment (add-to-home-screen manifest, Nginx reference config, backups) and on-device iPad testing. Backend tests use pytest (`backend/tests/`); the frontend has no test framework.
+Phase-1 features are built: accounts/invites/readers (M1), PDF upload + rendering worker + admin UI (M2), and the reader side — register page, "small theater" shelf and page-flip reading page (M3). Add-to-home-screen is done (`public/manifest.webmanifest`, `public/icons/`, safe-area insets via `env(safe-area-inset-*)`). Remaining: M4 polish/deployment (Nginx reference config, deployment README, backups) and on-device iPad testing. Backend tests use pytest (`backend/tests/`); the frontend has no test framework.
 
 The product is called **萤火 (Firefly Tales)** — `dance-page` is only the repo/code name and must not appear in the UI (name constants live in `src/lib/app-info.ts`; set per-page tab titles with `useDocumentTitle()`). It is a web-based children's picture-book reader (Admin uploads PDFs; kids read on tablets with a page-curl effect; later AI read-aloud and page animation). Product requirements, decisions and open questions live in `docs/` (Chinese) — read `docs/01-product-overview.md` before building features. The planned backend (Python + FastAPI + SQLite + separate worker) is specified in `docs/05-tech-design.md`.
 
@@ -31,6 +31,9 @@ uv run pytest                      # single test: uv run pytest tests/test_auth.
 uv run ruff check . && uv run ruff format .
 uv run alembic revision --autogenerate -m "..."   # after changing app/models.py
 uv run scripts/render_samples.py   # render samples/*.pdf → samples/rendered/ to compare render settings
+
+# home-screen icons (repo root; renders the SVG in scripts/make-icons.py with local Chrome → public/icons/*.png)
+uv run scripts/make-icons.py
 
 # deploy (repo root): cp .env.example .env && docker compose up -d --build
 ```

@@ -2,7 +2,7 @@
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { PageFlip } from "page-flip";
 import type { BookPage, Orientation, SpreadStartPage } from "@/api/types";
-import { BOOK_PADDING, computeBookLayout } from "@/pages/stage/reader-layout";
+import { BOOK_PADDING_CSS, computeBookLayout } from "@/pages/stage/reader-layout";
 
 // 只给当前页前后这么多页设置图片地址，其余页释放图片以节省平板内存（封面始终保留，合上书时要用）
 const LOAD_WINDOW = 4;
@@ -93,6 +93,7 @@ export function FlipBook({
     onReadyRef.current = onReady;
   });
   const readyFiredRef = useRef(false);
+  // 内边距以内的可用区域（ResizeObserver 的 contentRect 不含内边距）
   const { width, height } = useElementSize(hostRef);
 
   const ratio = pages[0].width / pages[0].height;
@@ -233,7 +234,7 @@ export function FlipBook({
     <div
       ref={hostRef}
       className="absolute inset-0 flex items-center justify-center"
-      style={{ padding: `${BOOK_PADDING.top}px ${BOOK_PADDING.x}px ${BOOK_PADDING.bottom}px` }}
+      style={{ padding: BOOK_PADDING_CSS }}
     />
   );
 }

@@ -6,10 +6,16 @@
     <title>萤火</title>
     <meta name="description" content="萤火（Firefly Tales）：陪孩子读绘本，在平板上像翻真书一样一页页翻开故事。" />
     <meta name="application-name" content="萤火" />
-    <meta name="apple-mobile-web-app-title" content="萤火" />
     <meta name="theme-color" content="#141833" />
     <meta name="format-detection" content="telephone=no" />
+    <!-- 添加到主屏幕（D59）：从主屏幕打开时全屏显示，页面延伸到状态栏下面 -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="萤火" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   </head>
   <body>
     <div id="root"></div>

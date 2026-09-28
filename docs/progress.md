@@ -13,7 +13,7 @@
 [✅] M1 后端骨架与账户
 [✅] M2 上传与拆页          →  后端 + 登录页 + Admin 前端（绘本 / 邀请码 / 读者）
 [✅] M3 阅读端              →  注册页、小剧场书架、阅读页（对开 / 单页、跨页配对、读完合书、全屏）；桌面浏览器模拟 iPad / 手机验证通过
-[ ] M4 打磨与上线
+[🟡] M4 打磨与上线           →  添加到主屏幕已完成；待做 Nginx 参考配置、部署说明、备份
 [ ] AI 阶段需求讨论（第一期可翻书后再开始）
 ```
 
@@ -28,11 +28,11 @@
 
 1. 读 `docs/README.md` 和本文件。
 2. 向用户简要汇报当前位置，确认两个断点：
-   - iPad 实测结果如何？有问题先修；全部通过后把 M0 结论写入 `05-tech-design.md` 第 3.2 节，并在 `decision-log.md` 记录（下一个编号 **D59**）。不达标时给出 2–3 个替代方案（其他库 / 自研 CSS 3D 翻页）并附推荐。
+   - iPad 实测结果如何？有问题先修；全部通过后把 M0 结论写入 `05-tech-design.md` 第 3.2 节，并在 `decision-log.md` 记录（下一个编号 **D60**）。不达标时给出 2–3 个替代方案（其他库 / 自研 CSS 3D 翻页）并附推荐。
    - `ls samples/` 检查是否有新 PDF；有则在 Admin 上传，重点看横版书和跨页检测结果。
 3. 进入 **M4 打磨与上线**（见 05 第 4 节、第 7 节）：
-   - 添加到主屏幕（P1，05 第 3.3 节）：`manifest.webmanifest`、iOS `apple-mobile-web-app-*` meta、图标；
-   - Nginx 参考配置（`client_max_body_size 210m`、上传超时、SPA 回退到 `index.html`、`/api/` 转发）；
+   - ~~添加到主屏幕~~（已完成，D59）；
+   - Nginx 参考配置（`.webmanifest` 需要 `application/manifest+json` 类型，较旧的 Nginx `mime.types` 里没有；`client_max_body_size 210m`、上传超时、SPA 回退到 `index.html`、`/api/` 转发）；
    - 部署说明（README）：`.env`、`docker compose up -d --build`、前端 `npm run build` 后把 `dist/` 交给 Nginx、`COOKIE_SECURE`；
    - 备份：SQLite 在线备份命令 + `books/` 目录同步的脚本或说明；
    - 视情况：Admin 页面预览用的缩略图（现在直接加载 2048px 大图）、Docker 镜像瘦身（多阶段构建）。
@@ -64,6 +64,7 @@
 - [ ] 全屏按钮可用
 - [ ] 翻到最后一页出现"故事讲完啦！"提示，点"合上书本"后动画回到封面
 - [ ] 书架、登录、注册页在 iPad 上显示正常，字体（站酷小薇）加载正常
+- [ ] Safari"分享 → 添加到主屏幕"后图标、名称正确；从主屏幕打开没有地址栏，夜幕背景铺到状态栏下，按钮不被状态栏和底部横条遮挡，没有全屏按钮
 
 ## 协作约定
 
@@ -71,7 +72,7 @@
 - **角色**：Claude 以产品经理 + 技术负责人的身份推进，每轮给出**带推荐方案的问题**（表格形式），用户常以"都同意"一次确认。
 - **文档规则**：
   - 只把**已确认**的内容写入 `docs/01–05`；未确认的放 [open-questions.md](./open-questions.md)。
-  - 每个决策追加到 [decision-log.md](./decision-log.md)，编号连续（当前最后一条是 **D58**）。
+  - 每个决策追加到 [decision-log.md](./decision-log.md)，编号连续（当前最后一条是 **D59**）。
   - 每次工作结束前更新本文件的"当前位置""断点""下次开始时"。
 - **视觉风格**：阅读端为"B 小剧场"。示意图的本地副本在 [design/reader-style-options.html](./design/reader-style-options.html)，在线版在 https://claude.ai/artifact/3TwChZ4w49eXKvKkSMSW1z（需要登录用户本人的 claude.ai 账号）。
 
@@ -116,3 +117,4 @@
 | 2026-09-28 | 收藏图标改为手绘涂鸦贴纸爱心 + 收藏反馈动画（D56）；收藏页标题、头像菜单也改用同一个爱心 |
 | 2026-09-28 | 书架翻页按钮改为手绘涂鸦风格（D57），页码加手画波浪线 |
 | 2026-09-28 | "我的收藏"入口改为头像左侧的手绘爱心按钮（D58），头像菜单不再包含收藏入口 |
+| 2026-09-28 | M4：添加到主屏幕（D59）——`manifest.webmanifest`、iOS meta、`scripts/make-icons.py` 生成的 PNG 图标，书架 / 阅读页 / Admin 顶栏让出设备安全区；修复阅读页书本四周留白被重复扣除（书比设计小一圈，书架"翻开"的落点也与真实封面对不上） |

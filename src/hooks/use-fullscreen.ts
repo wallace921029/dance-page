@@ -12,7 +12,10 @@ type FullscreenElement = HTMLElement & {
 export function useFullscreen() {
   const doc = document as FullscreenDocument;
   const root = document.documentElement as FullscreenElement;
-  const standalone = window.matchMedia("(display-mode: standalone)").matches;
+  const standalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    // 旧版 iOS 只提供这个非标准属性
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
   const supported = !standalone && Boolean(root.requestFullscreen ?? root.webkitRequestFullscreen);
   const [active, setActive] = useState(false);
 

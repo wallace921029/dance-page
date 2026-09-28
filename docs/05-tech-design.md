@@ -240,7 +240,11 @@ DATA_DIR/
 
 ### 3.3 添加到主屏幕（P1）
 
-- 提供 `manifest.webmanifest` 和 iOS 所需的 `apple-mobile-web-app-*` meta 标签、图标。
+- `public/manifest.webmanifest`（`display: standalone`、主题色 `#141833`）和 `index.html` 里 iOS 所需的 `apple-mobile-web-app-*` meta、`apple-touch-icon`（D59）。
+- 图标在 `public/icons/`，由 `uv run scripts/make-icons.py` 用本机 Chrome 把 SVG 渲染成 PNG；改图案时改脚本里的 SVG 再重新生成。
+- iOS 状态栏为 `black-translucent`：页面延伸到状态栏下面。书架、阅读页（按钮、页码、书本留白）和 Admin 顶栏都用 `env(safe-area-inset-*)` 让出安全区；阅读页的书本留白定义在 `src/pages/stage/reader-layout.ts`（`BOOK_PADDING_CSS`），书架"翻开进入阅读"的落点计算也用它。
+- 从主屏幕打开时隐藏全屏按钮（`display-mode: standalone` 或 iOS 的 `navigator.standalone`）。
+- iOS 上主屏幕 App 与 Safari 的 Cookie 不共享，第一次从主屏幕打开需要重新登录一次。
 - 第一期不做离线缓存（不引入 Service Worker）。
 
 ## 4. 部署

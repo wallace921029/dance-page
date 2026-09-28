@@ -154,6 +154,8 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
       className={cn(
         // 书架固定一屏高，不出现滚动条：书格按剩余空间缩放
         "relative isolate flex h-dvh flex-col overflow-hidden font-stage",
+        // 从主屏幕打开时让出状态栏和刘海（底部由 main 和翻页按钮各自让出）
+        "pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
         theme.dark && "dark",
         theme.text,
       )}

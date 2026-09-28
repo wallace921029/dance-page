@@ -83,12 +83,12 @@ export default function ReaderPage() {
         />
       )}
 
-      <div className="absolute top-3 left-4 z-10">
+      <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] left-[calc(1rem+env(safe-area-inset-left))] z-10">
         <StageRoundButton label="返回书架" nativeButton={false} render={<Link to={shelfHref} />}>
           <ArrowLeft />
         </StageRoundButton>
       </div>
-      <div className="absolute top-3 right-4 z-10">
+      <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-10">
         <FullscreenButton />
       </div>
 
@@ -122,7 +122,7 @@ export default function ReaderPage() {
           }}
         />
       ) : (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center font-stage-title text-xl tracking-widest tabular-nums">
+        <div className="pointer-events-none absolute inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] text-center font-stage-title text-xl tracking-widest tabular-nums">
           {visible.map((p) => p + 1).join("–")} / {book.pages.length}
         </div>
       )}
@@ -146,7 +146,7 @@ function FullscreenButton() {
 /** 翻到最后一页时的读完提示（D41） */
 function EndHint({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute inset-x-0 bottom-2 z-10 flex justify-center">
+    <div className="absolute inset-x-0 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-10 flex justify-center">
       <Item
         variant="outline"
         size="sm"
