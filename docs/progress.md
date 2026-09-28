@@ -1,12 +1,12 @@
 # 项目进度与交接
 
-> 最后更新：2026-09-28 · 工作分支 `phase1-mvp` · 最后一个决策编号 **D87**（下一个 **D88**）
+> 最后更新：2026-09-28 · 工作分支 `main` · 最后一个决策编号 **D90**（下一个 **D91**）
 >
 > **给接手的 Claude / 开发者**：这是继续工作的入口。用户说"继续我们的任务"时，按顺序读：本文件 → `CLAUDE.md` → 与当前任务相关的 `docs/0x-*.md`，然后按"下次开始时"一节执行。每次工作结束前更新本文件（当前位置、断点、下次开始时、工作记录）。
 
 ## 一句话现状
 
-第一期（上传 → 书架 → 翻页阅读）功能全部完成，只差 iPad 真机实测和部署收尾（M4）。AI 阶段需求和技术设计已确认，完成了第一步"AI 配置"（A1）；**下一步是 A0 试验**：用样书实际调用百炼 / 火山，确定台词识别、音色、首尾帧视频的具体做法，然后开发 A2 → A3（朗读）→ A4（动画）。
+第一期（上传 → 书架 → 翻页阅读）功能全部完成，只差 iPad 真机实测和部署收尾（M4）。AI 阶段完成了 A1（AI 配置）、A0（真实 API 试验验证，D88）与 **A2（故事与草稿工作台，D89）**，并修复了视觉模型深度思考截断与弹窗关闭交互（D90）；**下一步是 A3 朗读 → Voice Ready**：角色音色设计与试听、单元台词逐行合成与拼接、后台确认与阅读端小喇叭播放。
 
 ## 当前位置
 
@@ -22,9 +22,9 @@
 AI 阶段（设计见 06-ai-tech-design.md）
 [✅] 需求（D61–D85）与技术设计 06
 [✅] A1 AI 配置              后台 /admin/ai：Key 读 .env、每种能力选服务商和模型、选择模型下拉、测试连接
-[⬜] A0 试验                 ← 下一步（需要用户在 .env 填好 Key，已填）
-[⬜] A2 故事与草稿
-[⬜] A3 朗读 → Voice Ready
+[✅] A0 试验                 全流程真实 API 验证通过（D88，见 samples/ai-trial/TRIAL_REPORT.md）
+[✅] A2 故事与草稿           绘本详情页 AI 工作台、故事分析入库、角色 CRUD、开页分别/合并、草稿编辑与单单元重写
+[⬜] A3 朗读 → Voice Ready   ← 下一步
 [⬜] A4 动画 → Dance Ready!
 ```
 
@@ -32,7 +32,7 @@ AI 阶段（设计见 06-ai-tech-design.md）
 
 ### 1. 代码和工具
 
-- 仓库：`github.com/wallace921029/dance-page`，**工作分支 `phase1-mvp`**（`main` 只有最初的模板和文档）：`git clone … && git checkout phase1-mvp`。
+- 仓库：`github.com/wallace921029/dance-page`，**直接使用 `main` 分支（全量代码均在 `main`，无其他分支）**：`git clone … && cd dance-page`。
 - 工具：Node 24（npm）、[uv](https://docs.astral.sh/uv/)（自动安装 Python 3.13）、git、Google Chrome（`scripts/make-icons.py` 和端到端测试会用到）。
 - 启动：仓库根目录执行 `scripts/dev.sh`（首次会自动 `npm install`、`uv sync`，并从模板创建 `backend/.env`）。浏览器打开 `http://localhost:5173`，管理员账号密码在 `backend/.env`。
 
@@ -48,7 +48,7 @@ AI 阶段（设计见 06-ai-tech-design.md）
 ### 3. 检查环境是否正常
 
 ```bash
-cd backend && uv run pytest            # 应全部通过（目前 96 个）
+cd backend && uv run pytest            # 应全部通过（目前 103 个）
 cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组件里原有的几个警告
 ```
 
@@ -68,19 +68,32 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 | --- | --- | --- | --- |
 | 1 | 在 iPad 上实测阅读页，按下方"iPad 验证清单"反馈结果 | 上线之前 | 待测试 |
 | 2 | 再提供 1–2 本 PDF，**至少一本横版**，放到 `samples/`（目前只有一本竖版；横版只用生成的测试 PDF 验证过） | 上线之前 | 待提供 |
-| 3 | 在 `.env` 填好三个 AI Key，并在"AI 配置"页各点一次"测试连接" | A0 试验之前 | 原电脑已填好；换电脑需重新填 |
+| 3 | 在 `.env` 填好三个 AI Key，并在"AI 配置"页各点一次"测试连接" | A0 试验之前 | ✅ 已完成（A0 试验已全面验证） |
 
 ## 下次开始时（Claude 执行步骤）
 
-1. 读本文件、`CLAUDE.md`、`docs/06-ai-tech-design.md`（AI 相关工作）。
-2. 向用户简要汇报当前位置，确认断点：iPad 实测结果？`samples/` 有没有新 PDF？`.env` 里的 Key 是否已填好、"测试连接"是否通过？
-3. 按下面的"接下来要做的事"推进，默认从 **A0 试验** 开始；用户也可能先要做 M4 部署或处理 iPad 反馈。
+1. 读本文件、`CLAUDE.md`、`docs/06-ai-tech-design.md`。
+2. 向用户简要汇报当前位置：A2 故事与草稿工作台已完成（D89），视觉大模型深度思考截断与弹窗关闭交互已修复（D90）。
+3. 推进 **Milestone A3 朗读 → Voice Ready**（分三步执行）：
+   - **步骤 1：角色专属音色设计与试听服务**
+     - Worker `ai_voice` 任务：针对角色 `voice_prompt` 调用百炼 `qwen-voice-design`（支持自定义提示词定制音色），试听 WAV 保存至 `books/{id}/ai/voices/{voice_id}.wav`，存入 `character_voices` 表；
+     - 后端提供音频静态服务接口：`GET /api/admin/books/{id}/ai/voices/{voice_id}`；
+     - 前端角色卡片：显示音色状态、播放试听音频、重新生成/更换音色；
+   - **步骤 2：单元台词逐行合成与拼接**
+     - Worker `ai_tts_unit` 任务：检查单元所有说话人角色均已生成音色，逐行调用 `qwen3-tts-vd-2026-01-26` 合成音频，行间插入 0.4s 静音，使用 PyAV 编码为 AAC `.m4a` 保存至 `books/{id}/ai/audio/{unit_id}.m4a`；
+     - 记录 `audio_duration_ms` 与 `audio_source_hash`，单元状态更新为 `ready`；
+     - 前端单元卡片：显示 **"生成朗读"** 按钮与试听音频播放器（若草稿被编辑过提示"需要重新生成"）；
+     - 顶部工具栏：新增 **"全部生成朗读"** 批量入队（`POST /api/admin/books/{id}/ai/generate-all?type=audio`）；
+   - **步骤 3：后台 Voice Ready 确认与阅读端小喇叭播放**
+     - 后台 Voice Ready 状态切换接口（`PUT/DELETE /api/admin/books/{id}/ai/voice-ready`）；
+     - 书架端：对 `voice_ready` 为 true 的书名左侧展示手绘音乐符号 🎵（D70）；
+     - 阅读端：详情接口返回 `read_order` 与 units `audio_url`，页面展示手绘小喇叭按钮（分别生成左右各一，合并生成居中），顶栏提供"自动朗读"开关（本地 `localStorage`）与 Web Audio 解锁。
 
 ## 接下来要做的事
 
-### A0 试验（下一步）
+### A0 试验（已完成，D88）
 
-目的：用真实接口把 06 第 2、9 节里"待试验确认"的事项定下来，再开始写 A2–A4。建议写成 `backend/scripts/ai_trial.py`（`uv run scripts/ai_trial.py`），读取与后台相同的配置（`.env` 的 Key + 数据库里各能力选的模型），输出到 `samples/ai-trial/`（不提交）。试验会产生少量费用，开始前告诉用户大概会调用哪些接口。
+试验脚本 `backend/scripts/ai_trial.py`（`uv run scripts/ai_trial.py`）已完成全部 4 项试验验证，完整报告存档于 `samples/ai-trial/TRIAL_REPORT.md`。结论：故事识别推荐 `qwen3.8-flash`；角色音色设计用 `qwen-voice-design`；朗读合成用 `qwen3-tts-vd` + PyAV 编码 AAC .m4a；动画视频用 `wan2.2-kf2v-flash`（单页与对开左右拼图）。
 
 | # | 试验内容 | 要回答的问题 |
 | --- | --- | --- |
@@ -129,7 +142,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 
 ## 给 Claude 的操作注意事项
 
-- **提交**：只在用户要求时提交 / 推送；在 `phase1-mvp` 分支上工作，不要直接改 `main`。不要提交 `backend/.env`、`.env`、`backend/data/`、`samples/`。
+- **提交**：所有工作直接在 `main` 分支上进行，不要保留或创建任何其他分支；只在用户要求时提交 / 推送。不要提交 `backend/.env`、`.env`、`backend/data/`、`samples/`。
 - **并行会话**：用户有时会同时开另一个会话改代码（曾改过 `shelf.tsx`、文档、决策编号）。改文件前先看 `git status` / 最新内容；决策编号以 `decision-log.md` 最后一条为准。
 - **端到端测试不要碰用户的开发环境**：用独立端口、临时数据目录和独立 Vite 缓存，例如 `DATA_DIR=<临时目录>/data VITE_CACHE_DIR=<临时目录>/vite BACKEND_PORT=8010 FRONTEND_PORT=5180 scripts/dev.sh`；浏览器测试用 `uv run --with playwright python 脚本.py`（Chrome 路径 `/usr/bin/google-chrome`）。**不要删除或改写 `backend/data`**；用户的开发服务器可能正在运行并自动执行迁移。
 - **停测试环境**：按端口查进程号再结束（`ss -ltnp "sport = :8010"`），不要用会匹配到自己命令行的 `pkill -f <模式>`。
@@ -230,3 +243,6 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 | 2026-09-28 | 管理后台进场动画（D86）：`src/pages/admin/motion.tsx`（`Reveal` 模块、`AnimatedTableRow` 表格行、`RevealItem` 缩略图），布局里用 `MotionConfig reducedMotion="user"` 和按路径淡入的 `motion.main` |
 | 2026-09-28 | 整理交接文档：`progress.md` 重写为"现状 / 新电脑上手 / 断点 / 接下来要做的事（A0–A4、M4）/ 已知问题 / 操作注意事项"，方便换电脑、换模型后直接继续 |
 | 2026-09-28 | 管理后台"退出"收进右上角头像下拉菜单（D87）；记录 Vite 文件监听数上限（EMFILE）问题和不监听文件的测试方式 |
+| 2026-09-28 | 完成 A0 试验（D88）：编写 `backend/scripts/ai_trial.py`；全流程验证百炼与火山方舟视觉故事分析（推荐 `qwen3.8-flash` 单本成本<0.05元）、百炼 `qwen-voice-design` 角色音色设计与试听、多角色朗读逐行合成与 PyAV 拼接为 AAC `.m4a`、百炼 `wan2.2-kf2v-flash` 首尾帧循环视频（单页与对开大图拼接）；发现火山方舟 Seedance 2.0 未开通且 1.0 pro fast 不支持首尾帧，豆包语音 Key 缺 resource 权限；生成完整试验报告 `samples/ai-trial/TRIAL_REPORT.md` |
+| 2026-09-28 | 完成 AI Milestone A2（D89）：数据库迁移（`characters`、`character_voices`、`ai_units`、`books` AI 字段）；后端故事分析与单单元重写 Worker、开页与单元 CRUD 接口；前端绘本详情页 AI 工作台（故事/角色卡片、开页分别/合并切换、逐行台词与微动作编辑、单单元重写草稿）；102 个后端测试全部通过，前端打包与检查零错误 |
+| 2026-09-28 | 修复大模型长链思考截断与交互缺陷（D90）：视觉模型显式关闭思考模式（百炼 `enable_thinking=False`，方舟 `thinking={"type": "disabled"}`），Token 上限提至 8192；增强 JSON 解析容错（`strict=False` 支持未转义换行符、Markdown 代码块提取、末尾逗号自动修复与 `length` 截断拦截）；修复 Base UI `AlertDialogAction` 补全 Close 包装与工作台分析弹窗受控关闭；103 个后端测试通过，前端 Lint 0 错误 |

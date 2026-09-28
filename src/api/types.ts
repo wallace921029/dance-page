@@ -185,3 +185,98 @@ export interface AiModelList {
   /** 没能从服务商取到列表时的说明 */
   message: string | null;
 }
+
+// ---------- 绘本 AI 工作台（Milestone A2） ----------
+
+export interface AiLineItem {
+  character_id: number | null;
+  text: string;
+}
+
+export interface Character {
+  id: number;
+  book_id: string;
+  name: string;
+  is_narrator: boolean;
+  voice_prompt: string | null;
+  sort_order: number;
+}
+
+export interface AiUnit {
+  id: string;
+  book_id: string;
+  first_page_index: number;
+  page_count: number;
+  lines: AiLineItem[];
+  motion_prompt: string | null;
+  audio_status: "none" | "queued" | "running" | "ready" | "failed";
+  video_status: "none" | "queued" | "running" | "ready" | "failed";
+  audio_error: string | null;
+  video_error: string | null;
+  audio_source_hash: string | null;
+  video_source_hash: string | null;
+  audio_duration_ms: number | null;
+  video_duration_s: number | null;
+  video_resolution: string | null;
+  audio_version: number;
+  video_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Spread {
+  index: number;
+  left_page_index: number | null;
+  right_page_index: number | null;
+  mode: "single" | "separate" | "merged";
+  units: AiUnit[];
+}
+
+export interface AiJob {
+  id: number;
+  type: string;
+  book_id: string;
+  unit_id: string | null;
+  character_id: number | null;
+  status: "queued" | "running" | "done" | "failed";
+  progress_done: number;
+  progress_total: number;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface BookAi {
+  story: string | null;
+  read_order: "left_first" | "right_first";
+  voice_ready_at: string | null;
+  dance_ready_at: string | null;
+  characters: Character[];
+  spreads: Spread[];
+  running_jobs: AiJob[];
+}
+
+export interface CharacterCreateInput {
+  name: string;
+  is_narrator?: boolean;
+  voice_prompt?: string | null;
+}
+
+export interface CharacterUpdateInput {
+  name?: string | null;
+  is_narrator?: boolean | null;
+  voice_prompt?: string | null;
+  sort_order?: number | null;
+}
+
+export interface BookAiUpdateInput {
+  story?: string | null;
+  read_order?: "left_first" | "right_first" | null;
+}
+
+export interface UnitUpdateInput {
+  lines?: AiLineItem[] | null;
+  motion_prompt?: string | null;
+}
+

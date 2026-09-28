@@ -1,23 +1,20 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, CircleAlert } from "lucide-react";
-import { cn } from "cn";
 import { useAdminBook, useUpdateBook } from "@/api/books";
+import { AiWorkbench } from "@/pages/admin/ai-workbench";
 import type {
   AdminBookDetail,
-  BookPage,
   BookUpdate,
   Language,
   Orientation,
   SpreadStartPage,
 } from "@/api/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -40,13 +37,14 @@ import { formatDateTime, formatFileSize } from "@/lib/format";
 import { DeleteBookButton, VisibilityButton } from "@/pages/admin/book-actions";
 import { BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
 import { PageHeader } from "@/pages/admin/layout";
-import { Reveal, RevealItem } from "@/pages/admin/motion";
+import { Reveal } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
 
 export default function AdminBookDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { data: book, isPending, error } = useAdminBook(id);
+  const coverUpdate = useUpdateBook(id);
   useDocumentTitle(book?.title ?? "绘本管理");
 
   if (isPending) return <LoadingState />;
@@ -60,6 +58,16 @@ export default function AdminBookDetailPage() {
   }
 
   const ready = book.processing_status === "ready";
+  const handleSetCover = (index: number) =>
+    coverUpdate.mutate(
+      { cover_page_index: index },
+      {
+        onSuccess: () => toast.add({ title: `已将第 ${index + 1} 页设为封面`, type: "success" }),
+        onError: (err) =>
+          toast.add({ title: "设置封面失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+
   return (
     <>
       <BackLink />
@@ -108,7 +116,11 @@ export default function AdminBookDetailPage() {
       </Reveal>
       {ready && (
         <Reveal index={2}>
-          <PagesSection book={book} />
+          <AiWorkbench
+            book={book}
+            onSetCover={handleSetCover}
+            isSettingCover={coverUpdate.isPending}
+          />
         </Reveal>
       )}
     </>
@@ -273,137 +285,5 @@ function InfoForm({ book }: { book: AdminBookDetail }) {
         </CardFooter>
       </form>
     </Card>
-  );
-}
-
-// ---------- 页面预览 ----------
-
-type SpreadItem = BookPage | "empty" | "blank";
-
-/**
- * 按阅读端对开的方式把页面分组：封面单独在右侧；
- * 从第 3 页开始配对时，第 2 页左侧补一张空白页。
- */
-function toSpreads(pages: BookPage[], spreadStart: SpreadStartPage): SpreadItem[][] {
-  const items: SpreadItem[] = ["empty", ...pages];
-  if (spreadStart === 3 && pages.length > 1) items.splice(2, 0, "blank");
-  const spreads: SpreadItem[][] = [];
-  for (let i = 0; i < items.length; i += 2) spreads.push(items.slice(i, i + 2));
-  return spreads;
-}
-
-function PagesSection({ book }: { book: AdminBookDetail }) {
-  const update = useUpdateBook(book.id);
-  const portrait = book.orientation === "portrait";
-
-  const setCover = (index: number) =>
-    update.mutate(
-      { cover_page_index: index },
-      {
-        onSuccess: () => toast.add({ title: `已将第 ${index + 1} 页设为封面`, type: "success" }),
-        onError: (err) =>
-          toast.add({ title: "设置封面失败", description: getErrorMessage(err), type: "error" }),
-      },
-    );
-
-  const thumb = (page: BookPage) => (
-    <PageThumb
-      key={page.index}
-      page={page}
-      isCover={page.index === book.cover_page_index}
-      disabled={update.isPending}
-      onSetCover={() => setCover(page.index)}
-    />
-  );
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>页面（{book.page_count} 页）</CardTitle>
-        <CardDescription>
-          {portrait
-            ? "按平板横屏时的对开方式预览，请检查跨页大图是否左右拼接完整；如不对，请修改上方的对开配对。"
-            : "横版书始终单页显示。"}
-          将鼠标移到页面上可设为封面。
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {portrait ? (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3">
-            {toSpreads(book.pages, book.spread_start_page).map((spread, i) => (
-              <RevealItem key={i} index={i} className="grid grid-cols-2">
-                {spread.map((item, j) => (
-                  <Fragment key={j}>
-                    {item === "empty" ? (
-                      <div />
-                    ) : item === "blank" ? (
-                      <div className="self-start">
-                        <div
-                          className="rounded-l-sm bg-stone-50 ring-1 ring-border"
-                          style={{
-                            aspectRatio: `${book.pages[0].width} / ${book.pages[0].height}`,
-                          }}
-                        />
-                        <p className="mt-1 text-center text-xs text-muted-foreground">（空白）</p>
-                      </div>
-                    ) : (
-                      thumb(item)
-                    )}
-                  </Fragment>
-                ))}
-              </RevealItem>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-4 md:grid-cols-4">
-            {book.pages.map((page, i) => (
-              <RevealItem key={page.index} index={i} className="self-start">
-                {thumb(page)}
-              </RevealItem>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PageThumb({
-  page,
-  isCover,
-  disabled,
-  onSetCover,
-}: {
-  page: BookPage;
-  isCover: boolean;
-  disabled: boolean;
-  onSetCover: () => void;
-}) {
-  return (
-    <figure className="group/thumb relative self-start">
-      <img
-        src={page.url}
-        alt={`第 ${page.index + 1} 页`}
-        loading="lazy"
-        className={cn("w-full bg-muted ring-1 ring-border", isCover && "ring-2 ring-primary")}
-        style={{ aspectRatio: `${page.width} / ${page.height}` }}
-      />
-      {isCover ? (
-        <Badge className="absolute top-1.5 left-1.5">封面</Badge>
-      ) : (
-        <Button
-          size="xs"
-          variant="secondary"
-          disabled={disabled}
-          onClick={onSetCover}
-          className="absolute top-1.5 left-1.5 opacity-0 shadow-sm transition-opacity group-hover/thumb:opacity-100 focus-visible:opacity-100"
-        >
-          设为封面
-        </Button>
-      )}
-      <figcaption className="mt-1 text-center text-xs text-muted-foreground tabular-nums">
-        {page.index + 1}
-      </figcaption>
-    </figure>
   );
 }

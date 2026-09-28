@@ -29,3 +29,25 @@ def cover_path(settings: Settings, book_id: str) -> Path:
 
 def delete_book_files(settings: Settings, book_id: str) -> None:
     shutil.rmtree(book_dir(settings, book_id), ignore_errors=True)
+
+
+def ai_dir(settings: Settings, book_id: str) -> Path:
+    return book_dir(settings, book_id) / "ai"
+
+
+def ai_audio_path(settings: Settings, book_id: str, unit_id: str) -> Path:
+    return ai_dir(settings, book_id) / "audio" / f"{unit_id}.m4a"
+
+
+def ai_video_path(settings: Settings, book_id: str, unit_id: str) -> Path:
+    return ai_dir(settings, book_id) / "video" / f"{unit_id}.mp4"
+
+
+def ai_voice_path(settings: Settings, book_id: str, voice_id: int) -> Path:
+    return ai_dir(settings, book_id) / "voices" / f"{voice_id}.wav"
+
+
+def delete_ai_unit_files(settings: Settings, book_id: str, unit_id: str) -> None:
+    ai_audio_path(settings, book_id, unit_id).unlink(missing_ok=True)
+    ai_video_path(settings, book_id, unit_id).unlink(missing_ok=True)
+

@@ -89,6 +89,13 @@ class Book(Base):
     processing_error: Mapped[str | None]
     # 页面图或封面变化时加 1，拼进图片地址让浏览器缓存失效
     assets_version: Mapped[int] = mapped_column(default=0)
+    # AI 阶段字段（D67, D69, 06-ai-tech-design 第 4 节）
+    story: Mapped[str | None]
+    read_order: Mapped[str] = mapped_column(
+        String(16), default="left_first", server_default="left_first"
+    )  # 'left_first' | 'right_first'
+    voice_ready_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    dance_ready_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -101,11 +108,91 @@ class Book(Base):
     jobs: Mapped[list["Job"]] = relationship(
         back_populates="book", cascade="all, delete-orphan", passive_deletes=True
     )
+    characters: Mapped[list["Character"]] = relationship(
+        back_populates="book",
+        order_by="Character.sort_order",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    ai_units: Mapped[list["AiUnit"]] = relationship(
+        back_populates="book",
+        order_by="AiUnit.first_page_index",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def spread_start_page(self) -> int:
         """实际使用的对开配对方式；检测不出时按常规的"从第 2 页开始"。"""
         return self.spread_start_override or self.spread_start_detected or 2
+
+
+class Character(Base):
+    """绘本中的角色（D71、D72）。旁白也作为特殊角色。"""
+
+    __tablename__ = "characters"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    book_id: Mapped[str] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str]
+    is_narrator: Mapped[bool] = mapped_column(default=False)
+    voice_prompt: Mapped[str | None]
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+    book: Mapped[Book] = relationship(back_populates="characters")
+    voices: Mapped[list["CharacterVoice"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class CharacterVoice(Base):
+    """角色在某服务商 + 合成模型下的音色配置（D78）。"""
+
+    __tablename__ = "character_voices"
+    __table_args__ = (UniqueConstraint("character_id", "provider", "tts_model"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32))
+    tts_model: Mapped[str]
+    voice_id: Mapped[str]
+    voice_prompt_used: Mapped[str | None]
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    character: Mapped[Character] = relationship(back_populates="voices")
+
+
+class AiUnit(Base):
+    """生成单元：单页，或合并生成的左右对开两页（D71、D74）。"""
+
+    __tablename__ = "ai_units"
+    __table_args__ = (UniqueConstraint("book_id", "first_page_index"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
+    book_id: Mapped[str] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
+    first_page_index: Mapped[int]
+    page_count: Mapped[int] = mapped_column(default=1)  # 1 或 2
+    # lines: [{"character_id": int | None, "text": str}]
+    lines: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    motion_prompt: Mapped[str | None]
+    # 'none' | 'queued' | 'running' | 'ready' | 'failed'
+    audio_status: Mapped[str] = mapped_column(String(16), default="none")
+    video_status: Mapped[str] = mapped_column(String(16), default="none")
+    audio_error: Mapped[str | None]
+    video_error: Mapped[str | None]
+    audio_source_hash: Mapped[str | None]
+    video_source_hash: Mapped[str | None]
+    audio_duration_ms: Mapped[int | None]
+    video_duration_s: Mapped[int | None]
+    video_resolution: Mapped[str | None]
+    audio_version: Mapped[int] = mapped_column(default=0)
+    video_version: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+    book: Mapped[Book] = relationship(back_populates="ai_units")
 
 
 class Page(Base):
@@ -128,8 +215,18 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[str] = mapped_column(String(32))  # 'render_pdf'
+    # 'render_pdf' | 'ai_analyze_book' | 'ai_draft_unit'
+    # 'ai_voice' | 'ai_tts_unit' | 'ai_video_unit'
+    type: Mapped[str] = mapped_column(String(32))
     book_id: Mapped[str] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
+    unit_id: Mapped[str | None] = mapped_column(
+        ForeignKey("ai_units.id", ondelete="CASCADE"), index=True
+    )
+    character_id: Mapped[int | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), index=True
+    )
+    remote_task_id: Mapped[str | None]
+    next_poll_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     # 'queued' | 'running' | 'done' | 'failed'
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     progress_done: Mapped[int] = mapped_column(default=0)
