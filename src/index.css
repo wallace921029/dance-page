@@ -5,6 +5,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 阅读端"小剧场"主题（D37）：只新增颜色和字体，不改动 shadcn 的全局主题 */
+@theme {
+    --color-stage-night: #141833;   /* 夜幕：主背景 */
+    --color-stage-deep: #0E1024;    /* 阅读页四周的暗部 */
+    --color-stage-floor: #2B3062;   /* 台面：中心的舞台光 */
+    --color-stage-curtain: #8A2633; /* 幕布 */
+    --color-stage-curtain-dark: #5E1621;
+    --color-stage-spot: #FFD66B;    /* 聚光：高亮 */
+    --color-stage-light: #F5D98B;   /* 舞台光：标题、图标、页码 */
+    --font-stage-title: "ZCOOL XiaoWei", "Noto Sans SC Variable", serif;
+    --font-stage: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --animate-firefly: firefly 7s ease-in-out infinite alternate; /* 书架上的萤火虫 */
+}
+
+@keyframes firefly {
+    0% { transform: translate(0, 0); opacity: 0.55; }
+    50% { opacity: 1; }
+    100% { transform: translate(18px, -16px); opacity: 0.7; }
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
