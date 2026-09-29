@@ -323,6 +323,7 @@ docker compose（仓库根目录 docker-compose.yml）
 
 - **镜像版本**：Node 24（当前 LTS）、Python 3.14（Python 没有 LTS，用最新稳定版；后端测试在 3.14 上全部通过，开发环境的 `.python-version` 仍是 3.13，`requires-python` 是 `>=3.13`，两者都受支持）、Nginx `stable` 分支、uv 固定小版本。后端 Dockerfile 是多阶段构建，最终镜像不带 uv 和下载缓存。
 - **启动顺序**：api 通过健康检查（数据库迁移完成、开始提供服务）之后，worker 和 web 才启动；api 重启后 web 的 Nginx 会通过 Docker DNS 自动找到新地址，不需要重启 web。
+- **内存上限（D114）**：三个容器都设了 `mem_limit`（同值的 `memswap_limit`，即不许用 swap）：api 768m、worker 2g、web 256m，`.env` 里的 `API_MEM_LIMIT` / `WORKER_MEM_LIMIT` / `WEB_MEM_LIMIT` 可调。目的是哪个容器失控只会被系统杀掉、由 `restart: unless-stopped` 拉起，不会把 2 核 4G 的服务器拖到卡死。worker 被杀时正在跑的 PDF 拆页任务会重试一次；再被杀就标记失败，提示"处理时服务器内存不足…请压缩 PDF 后重新上传"（`runner.recover()`）。拆页本身内存不随页数增长（一次只渲染一页，跨页检测只保留每页两条 3 像素宽的边缘，见 `render.py`），峰值取决于单页内嵌图片的大小。
 - **非 root 运行**：api / worker 进程以普通用户运行。入口脚本 `backend/docker-entrypoint.sh` 以 root 启动，把挂载进来的数据目录交给该用户后再降权，所以宿主机上的 `./data`（Docker 第一次会以 root 身份创建）不用手动 `chown`。
 - **Nginx 配置**在 `deploy/nginx.conf`：单页应用回退到 `index.html`；`/assets/`（带哈希的构建产物）缓存一年、`index.html` 不缓存；`client_max_body_size 210m`（略高于应用层的 200MB，由后端返回清晰的中文错误提示）；上传接口不在 Nginx 里整个缓存请求体、超时放宽到 600 秒；视频、音频的 Range 请求原样透传；`.webmanifest` 的 MIME 类型。
 - **真实客户端 IP**（登录、注册限流按 IP 计数）：`web` 只信任私有地址段发来的 `X-Forwarded-For`，从公网直接连进来的请求自带的 `X-Forwarded-For` 一律忽略，防止伪造 IP 绕过限流；前面有自己的 Nginx 时，让它带上 `X-Forwarded-For` 即可。

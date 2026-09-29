@@ -40,6 +40,12 @@ DB_NOT_READY_RETRY_SECONDS = 2.0
 VIDEO_JOB_TYPES = ("ai_cover_video", "ai_video_unit")
 # 同时在服务商那边排队 / 生成的视频任务上限
 MAX_REMOTE_VIDEOS = 3
+# PDF 拆页被中断（进程被杀）几次后不再重试：反复被杀多半是内存不足
+# （容器有内存上限，超了会被系统杀掉），再试只会把 Worker 一次次杀掉
+MAX_RENDER_ATTEMPTS = 2
+RENDER_KILLED_MESSAGE = (
+    "处理时服务器内存不足，处理进程被系统终止。请压缩 PDF（降低内嵌图片的分辨率）后重新上传"
+)
 # 视频任务每隔多久查询一次；查询出错（如网络抖动）也按这个间隔重试
 VIDEO_POLL_INTERVAL = timedelta(seconds=15)
 # 提交后这么久还没生成好就算失败
@@ -69,7 +75,19 @@ class Worker:
 
     def recover(self) -> None:
         """上次退出时正在执行的任务（进程被杀、服务器重启）重新放回队列。
-        已提交给服务商的视频任务改为等待查询，不重新提交（避免重复付费）。"""
+        已提交给服务商的视频任务改为等待查询，不重新提交（避免重复付费）。
+        PDF 拆页已经被中断过 MAX_RENDER_ATTEMPTS 次的不再重试，直接标记失败（多半是内存不足）。"""
+        with self.session_factory() as db:
+            killed = db.execute(
+                select(Job.id, Job.book_id).where(
+                    Job.status == "running",
+                    Job.type == "render_pdf",
+                    Job.attempts >= MAX_RENDER_ATTEMPTS,
+                )
+            ).all()
+        for job_id, book_id in killed:
+            logger.warning("拆页反复被中断，标记失败 book=%s", book_id)
+            self._fail(job_id, book_id, RENDER_KILLED_MESSAGE)
         with self.session_factory() as db:
             submitted = db.execute(
                 update(Job)

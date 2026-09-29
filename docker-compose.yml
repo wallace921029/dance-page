@@ -7,6 +7,8 @@
 #   web     Nginx：托管前端页面，并把 /api 转发给 api
 #   api     后端接口（启动时自动执行数据库迁移）
 #   worker  后台任务：PDF 拆页、AI 分析 / 朗读 / 动画视频
+# 内存上限（.env 里可调）：每个容器都限制了内存，并且不允许用 swap。哪个容器失控只会被系统杀掉并自动重启，
+# 不会把整台服务器拖到卡死；默认值按 2 核 4G 的服务器定。PDF 拆页太吃内存被杀时，管理页面会提示重新上传。
 # 数据（数据库、原始 PDF、页面图、AI 产物）都在宿主机的 DATA_PATH 目录（默认 ./data），备份它即可。
 #
 # 已有自己的 Nginx（域名、HTTPS）时：在 .env 里设 WEB_BIND=127.0.0.1，再让你的 Nginx 把整个站点转发到
@@ -41,6 +43,8 @@ services:
       timeout: 5s
       retries: 6
       start_period: 40s
+    mem_limit: ${API_MEM_LIMIT:-768m}
+    memswap_limit: ${API_MEM_LIMIT:-768m}
     security_opt:
       - no-new-privileges:true
     logging: *logging
@@ -58,6 +62,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    memswap_limit: ${WORKER_MEM_LIMIT:-2g}
     security_opt:
       - no-new-privileges:true
     logging: *logging
@@ -82,5 +88,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    mem_limit: ${WEB_MEM_LIMIT:-256m}
+    memswap_limit: ${WEB_MEM_LIMIT:-256m}
     logging: *logging
     restart: unless-stopped

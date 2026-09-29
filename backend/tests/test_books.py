@@ -100,6 +100,26 @@ def test_worker_recovers_interrupted_jobs(admin, worker, app, pdf_bytes):
     assert worker.run_once() is True
 
 
+def test_worker_gives_up_render_killed_repeatedly(admin, worker, app, pdf_bytes):
+    """拆页每次都把 Worker 杀掉（内存不足）：第一次中断后重试，第二次起标记失败并给出提示。"""
+    book_id = upload(admin, pdf_bytes).json()["id"]
+
+    def crash_while_running(attempts: int):
+        with app.state.session_factory() as db:
+            db.execute(update(Job).values(status="running", attempts=attempts))
+            db.commit()
+        worker.recover()
+
+    crash_while_running(1)
+    assert admin.get(f"/api/admin/books/{book_id}").json()["processing_status"] == "processing"
+
+    crash_while_running(2)
+    book = admin.get(f"/api/admin/books/{book_id}").json()
+    assert book["processing_status"] == "failed"
+    assert "内存不足" in book["processing_error"]
+    assert worker.run_once() is False  # 不会再被领取
+
+
 def test_book_deleted_while_processing(admin, worker, settings, pdf_bytes, monkeypatch):
     book_id = upload(admin, pdf_bytes).json()["id"]
     real_render = runner.render_pdf
