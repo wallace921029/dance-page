@@ -10,7 +10,7 @@ import { LoopVideo } from "@/pages/stage/loop-video";
 import { DanceReadySign } from "@/pages/stage/dance-ready-sign";
 import { DoodleHeart } from "@/pages/stage/doodle-heart";
 import { DoodleNote } from "@/pages/stage/doodle-note";
-import { coverRectInReader } from "@/pages/stage/reader-layout";
+import { appScreenHeight, coverRectInReader } from "@/pages/stage/reader-layout";
 import type { ShelfTheme } from "@/pages/stage/shelf-themes";
 import { unlockStoryAudio } from "@/pages/stage/story-audio";
 import {
@@ -53,7 +53,7 @@ export function ShelfItem({
     const from = image.getBoundingClientRect();
     const to = coverRectInReader(
       window.innerWidth,
-      window.innerHeight,
+      appScreenHeight(),
       book.cover_aspect,
       book.orientation,
     );

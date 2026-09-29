@@ -21,7 +21,8 @@ export function startBookOpening(image: HTMLImageElement, from: Rect, to: Rect):
   finishBookOpening();
   const layer = document.createElement("div");
   // 过渡期间挡住点击，避免孩子连点打开别的书
-  layer.style.cssText = "position:fixed;inset:0;z-index:100";
+  layer.style.cssText =
+    "position:fixed;top:0;left:0;width:100%;height:var(--app-screen-height);z-index:100";
   const dim = document.createElement("div");
   dim.style.cssText = `position:absolute;inset:0;background:${READER_BACKGROUND};opacity:0`;
   const flyer = document.createElement("img");

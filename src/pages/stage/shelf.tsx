@@ -18,7 +18,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll";
 import { getErrorMessage } from "@/lib/api";
 import { isStaff } from "@/lib/roles";
 import { StageBrand, StageRoundButton } from "@/pages/stage/common";
@@ -187,7 +186,6 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
   const effectsRef = useRef<HTMLDivElement>(null);
   useShelfFirefly(effectsRef, shelfMotion.enabled && Boolean(theme.fireflies));
   useDocumentTitle(favoritesMode ? "我的收藏" : undefined);
-  useLockDocumentScroll();
 
   useEffect(() => {
     if (!books || pageParam === null || pageParam === String(page)) return;
@@ -221,7 +219,8 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
     <div
       className={cn(
         // 书架固定一屏高，不出现滚动条：书格按剩余空间缩放
-        "relative isolate flex h-dvh flex-col overflow-hidden font-stage",
+        // fixed + 整屏高度：不撑高文档（文档不可滚动，就不会被顶上去），又能铺到屏幕最底（见 index.css 的 --app-screen-height）
+        "fixed top-0 left-0 isolate flex h-(--app-screen-height) w-full flex-col overflow-hidden font-stage",
         // 从主屏幕打开时让出状态栏和刘海（底部由 main 和翻页按钮各自让出）
         "pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
         theme.dark && "dark",
@@ -340,7 +339,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
       {!isPending && !error && pageCount > 1 && (
         <nav
           aria-label="书架翻页"
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-center gap-5 sm:gap-8"
+          className="pointer-events-none absolute inset-x-0 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-center gap-5 sm:gap-8"
         >
           <ShelfPageButton
             direction="previous"

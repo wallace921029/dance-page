@@ -154,7 +154,7 @@ export function ShelfBackdrop({ theme }: { theme: ShelfTheme }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 overflow-hidden"
+      className="pointer-events-none fixed top-0 left-0 h-(--app-screen-height) w-full overflow-hidden"
       style={{ backgroundImage: theme.background }}
     >
       <Backdrop />

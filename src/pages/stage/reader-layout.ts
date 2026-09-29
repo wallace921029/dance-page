@@ -15,6 +15,17 @@ export const BOOK_PADDING_CSS = [
   `calc(${BASE_PADDING.x}px + env(safe-area-inset-left))`,
 ].join(" ");
 
+/** 书架、阅读页整屏的高度（像素）：与 CSS 里的 --app-screen-height 一致，主屏幕应用里比 innerHeight 高一截 */
+export function appScreenHeight() {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:0;left:0;width:1px;visibility:hidden;pointer-events:none;height:var(--app-screen-height)";
+  document.body.appendChild(probe);
+  const height = probe.getBoundingClientRect().height;
+  probe.remove();
+  return height || window.innerHeight;
+}
+
 /** 把 BOOK_PADDING_CSS 换算成像素（安全区只能由浏览器算出来） */
 function readBookPadding() {
   const probe = document.createElement("div");
