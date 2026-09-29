@@ -18,7 +18,7 @@ export const BOOK_PADDING_CSS = [
 /** 把 BOOK_PADDING_CSS 换算成像素（安全区只能由浏览器算出来） */
 function readBookPadding() {
   const probe = document.createElement("div");
-  probe.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;padding:${BOOK_PADDING_CSS}`;
+  probe.style.cssText = `position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;padding:${BOOK_PADDING_CSS}`;
   document.body.appendChild(probe);
   const style = getComputedStyle(probe);
   const padding = {

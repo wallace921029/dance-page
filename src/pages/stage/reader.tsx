@@ -9,6 +9,7 @@ import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useFullscreen } from "@/hooks/use-fullscreen";
+import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll";
 import { getErrorMessage } from "@/lib/api";
 import { READER_BACKGROUND, StageRoundButton, stageSubmitButtonClass } from "@/pages/stage/common";
 import { finishBookOpening } from "@/pages/stage/book-opening";
@@ -66,6 +67,7 @@ export default function ReaderPage() {
   });
 
   useDocumentTitle(book?.title);
+  useLockDocumentScroll();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

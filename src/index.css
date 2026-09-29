@@ -181,4 +181,15 @@
   html {
     @apply font-sans;
     }
+  /* 书架和阅读页固定一屏：body 固定在视口里，文档不可滚动（见 use-lock-document-scroll.ts） */
+  html.scroll-locked,
+  html.scroll-locked body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    }
+  html.scroll-locked body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    }
 }

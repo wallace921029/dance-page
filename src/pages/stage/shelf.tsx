@@ -16,13 +16,16 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { useLockDocumentScroll } from "@/hooks/use-lock-document-scroll";
 import { getErrorMessage } from "@/lib/api";
 import { isStaff } from "@/lib/roles";
 import { StageBrand, StageRoundButton } from "@/pages/stage/common";
 import { DoodleArrow } from "@/pages/stage/doodle-arrow";
 import { AccountDialog } from "@/pages/stage/account-dialog";
 import { DoodleHeart } from "@/pages/stage/doodle-heart";
+import { DoodleRefresh } from "@/pages/stage/doodle-refresh";
 import { DoodleSparkle } from "@/pages/stage/doodle-sparkle";
 import { DoodleTheme } from "@/pages/stage/doodle-theme";
 import { ShelfBackdrop } from "@/pages/stage/shelf-backdrop";
@@ -115,7 +118,10 @@ function useLandscapeRows(
 /** 书架页。mode="favorites" 时为"我的收藏"（D55），展示方式与首页相同 */
 export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites" }) {
   const favoritesMode = mode === "favorites";
-  const { data: allBooks, isPending, error } = useShelf();
+  const shelf = useShelf();
+  const { data: allBooks, isPending } = shelf;
+  // 刷新失败时（网络抖动）保留已经显示的书架，不换成错误页；只有第一次加载失败才显示错误
+  const error = allBooks ? null : shelf.error;
   const { data: me } = useQuery(meQuery);
   const [theme, setTheme] = useShelfTheme();
   const location = useLocation();
@@ -181,6 +187,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
   const effectsRef = useRef<HTMLDivElement>(null);
   useShelfFirefly(effectsRef, shelfMotion.enabled && Boolean(theme.fireflies));
   useDocumentTitle(favoritesMode ? "我的收藏" : undefined);
+  useLockDocumentScroll();
 
   useEffect(() => {
     if (!books || pageParam === null || pageParam === String(page)) return;
@@ -249,14 +256,13 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
             ) : (
               <StageBrand className="shrink-0 text-3xl" />
             )}
+            <RefreshButton refetch={shelf.refetch} />
             <ShelfSearch
-              // 切换"全部 / 收藏"时重新挂载，按新页面的搜索词决定是否展开
+              // 切换"全部 / 收藏"时重新挂载，弹窗里的输入内容按新页面的搜索词重新开始
               key={mode}
               ref={searchRef}
               value={query}
               onChange={setQuery}
-              enableMotion={shelfMotion.enabled}
-              buttonClassName={theme.avatar}
             />
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -402,6 +408,42 @@ function ThemeButton({
         key={theme.id}
         id={theme.id}
         className="size-full animate-sticker-pop drop-shadow-[0_2px_2px_rgba(30,20,50,.35)] motion-reduce:animate-none"
+      />
+    </Button>
+  );
+}
+
+/**
+ * 搜索左边的"刷新"按钮（D120）：重新向服务器取一遍书架，新上架、下架或改了封面的绘本立刻看到。
+ * 取的时候图标转圈（至少转 0.7 秒，让人看得出点到了）；失败时提示一下，书架保持原样
+ */
+function RefreshButton({ refetch }: { refetch: ReturnType<typeof useShelf>["refetch"] }) {
+  const [spinning, setSpinning] = useState(false);
+  const refresh = async () => {
+    if (spinning) return;
+    setSpinning(true);
+    const minSpin = new Promise((resolve) => window.setTimeout(resolve, 700));
+    const [result] = await Promise.all([refetch(), minSpin]);
+    setSpinning(false);
+    if (result.isError) {
+      toast.add({ title: "刷新失败", description: getErrorMessage(result.error), type: "error" });
+    }
+  };
+  return (
+    <Button
+      variant="ghost"
+      size="icon-lg"
+      aria-label="刷新书架"
+      title="刷新书架"
+      aria-busy={spinning}
+      onClick={refresh}
+      className="size-11 -rotate-3 rounded-full bg-transparent p-1 transition-transform hover:scale-110 hover:bg-transparent focus-visible:ring-stage-spot/60 active:scale-95 motion-reduce:transition-none dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-full"
+    >
+      <DoodleRefresh
+        className={cn(
+          "size-full drop-shadow-[0_2px_2px_rgba(30,20,50,.35)]",
+          spinning && "animate-spin motion-reduce:animate-none",
+        )}
       />
     </Button>
   );
