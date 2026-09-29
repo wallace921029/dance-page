@@ -1,4 +1,4 @@
-"""A0 阶段 AI 能力试验脚本（docs/06-ai-tech-design.md 第 10 节、docs/progress.md）。
+"""A0 阶段 AI 能力试验脚本（docs/04-roadmap.md 里的 A0 里程碑、docs/06-ai-tech-design.md 第 9 节）。
 
 验证四项核心能力：
 1. 视觉分析整本故事（百炼 vs 火山方舟）：故事、角色、逐行台词、动作描述、跨页场景识别。

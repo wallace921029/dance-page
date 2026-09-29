@@ -1,4 +1,4 @@
-// 仿真翻页（page-flip / StPageFlip，HTML 模式）。M0 验证过的要点见 docs/progress.md。
+// 仿真翻页（page-flip / StPageFlip，HTML 模式）。M0 验证过的要点见 docs/05-tech-design.md 第 3.2 节。
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { PageFlip } from "page-flip";
 import type { BookPage, Orientation, SpreadStartPage } from "@/api/types";

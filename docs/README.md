@@ -1,17 +1,36 @@
-# 产品文档
+# 项目文档
 
-儿童绘本 Web 阅读产品的需求文档。只记录**已经确认**的内容；未确认的事项统一放在 [待决问题](./open-questions.md)，确认后再移入对应文档。
+**萤火（Firefly Tales）**：儿童绘本 Web 阅读产品的需求、设计和进度文档，全部用中文。文档只记录**已经确认**的内容，写"现在是什么"；未确认的事项放在 [progress.md 的"待决问题"](./progress.md#待决问题)，确认后再写入对应文档。
+
+## 从哪里开始
+
+| 你想做什么 | 先读 |
+| --- | --- |
+| 继续开发 / 换电脑接手 | [progress.md](./progress.md)（现状、断点、待决问题、环境注意事项）→ 仓库根目录的 `CLAUDE.md` |
+| 了解产品是什么 | [01 产品概述](./01-product-overview.md) |
+| 改读者看到的界面 | [02 阅读端需求](./02-reader.md) |
+| 改管理后台 | [03 Admin 需求](./03-admin.md) |
+| 看做到哪了、还差什么 | [04 路线图与范围](./04-roadmap.md) |
+| 改后端 / 前端结构、部署 | [05 技术设计](./05-tech-design.md) |
+| 改 AI 功能（分析、朗读、动画） | [06 AI 技术设计](./06-ai-tech-design.md) |
+| 查某个决定为什么这么做 | [decision-log.md](./decision-log.md)（顶部有"取代关系速查"） |
+
+## 文档清单
 
 | 文档 | 内容 |
 | --- | --- |
-| [progress.md](./progress.md) | **项目进度与交接**：现状、新电脑上手、接下来要做的事——从这里继续 |
-| [01-product-overview.md](./01-product-overview.md) | 产品定位、角色、版本规划、核心概念 |
-| [02-reader.md](./02-reader.md) | 阅读端需求 |
-| [03-admin.md](./03-admin.md) | Admin 管理后台需求 |
-| [04-mvp-scope.md](./04-mvp-scope.md) | 第一期 MVP 功能清单与优先级 |
-| [05-tech-design.md](./05-tech-design.md) | 第一期技术设计：架构、数据模型、API、部署（第 5 节 AI 预留已过时，以 06 为准） |
-| [06-ai-tech-design.md](./06-ai-tech-design.md) | AI 阶段技术设计：服务商对接、数据模型、生成流程、接口、前端、开发顺序 A0–A4（已确认，A1 已实现） |
-| [open-questions.md](./open-questions.md) | 待讨论 / 待决策事项 |
-| [decision-log.md](./decision-log.md) | 已做出的关键决策及理由 |
-| [design/reader-style-options.html](./design/reader-style-options.html) | 阅读端四个视觉风格方向的对比页（已选 B 小剧场） |
-| [design/shelf-style-options.html](./design/shelf-style-options.html) | 书架页四个主题方向的对比页（四套均已实现，可切换） |
+| [progress.md](./progress.md) | **项目进度与交接**：现状、新电脑上手、断点（等用户的事）、待决问题、已知问题、给 Claude 的操作注意事项、iPad 验证清单、协作约定 |
+| [01-product-overview.md](./01-product-overview.md) | 产品定位、角色与权限、设备与内容、版本规划、绘本状态、AI 总体原则、核心概念 |
+| [02-reader.md](./02-reader.md) | 阅读端需求：视觉风格（小剧场）、书架及顶栏、账户、阅读、朗读与动画 |
+| [03-admin.md](./03-admin.md) | Admin 需求：权限、导航、用户管理、绘本管理、AI 配置、AI 工作台 |
+| [04-roadmap.md](./04-roadmap.md) | 路线图与范围：阶段和里程碑状态、上线前待办、明确不做的事、兼容性目标 |
+| [05-tech-design.md](./05-tech-design.md) | 技术设计：架构、后端（数据模型、权限、API、拆页、Worker）、前端（路由、仿真翻页要点、模块）、部署、开发与测试 |
+| [06-ai-tech-design.md](./06-ai-tech-design.md) | AI 技术设计：服务商对接、AI 配置、数据模型、文件存储、生成流程、接口、前端。**章节号被代码注释引用，不要随意改动** |
+| [decision-log.md](./decision-log.md) | 已确认决策的编号记录（D1–D112…）：只追加，不删除；被取代的决策登记在顶部的速查表里 |
+| [design/](./design/) | 设计方案存档（阅读端四个风格方向、书架四个主题方向的对比页；最终方案都已实现，仅作记录） |
+
+## 维护约定
+
+- **分工**：需求变了改 01–03；里程碑状态、范围边界改 04；技术做法改 05 / 06；每个决定追加到 decision-log；交接信息改 progress。同一件事只在一处写清楚，其他地方链接过去。
+- **编号**：决策编号连续，以 decision-log 最后一条为准（progress.md 开头也记着下一个编号）。代码注释里的 `docs/06 第 x 节`、`D数字` 引用要保持有效。
+- **链接**：文档之间用相对链接；改标题时检查指向它的锚点。

@@ -3,8 +3,8 @@
 ## Product and source of truth
 
 - The product is **萤火 (Firefly Tales)**, a private web-based picture-book reader. `dance-page` is only the repository/code name and must not appear in the UI. Reuse `APP_NAME`/`APP_NAME_EN` from `src/lib/app-info.ts` and set page titles with `useDocumentTitle()`.
-- Product requirements and decisions are written in Chinese under `docs/`. Read `docs/01-product-overview.md` before building features and `docs/05-tech-design.md` for the system design.
-- When resuming ongoing work, read `docs/progress.md` first. Keep user-facing collaboration and project documentation in Chinese. Put unconfirmed requirements in `docs/open-questions.md`; append confirmed decisions to `docs/decision-log.md` with the next sequential decision number.
+- Product requirements and decisions are written in Chinese under `docs/`. Start at `docs/README.md` (it maps tasks to documents); read `docs/01-product-overview.md` before building features, `docs/05-tech-design.md` for the system design and `docs/06-ai-tech-design.md` for the AI parts.
+- When resuming ongoing work, read `docs/progress.md` first. Keep user-facing collaboration and project documentation in Chinese. Keep unconfirmed questions in the "待决问题" section of `docs/progress.md`; append confirmed decisions to `docs/decision-log.md` with the next sequential decision number.
 
 ## Build, test, lint, and run
 
@@ -100,7 +100,7 @@ Compose runs separate `api` and `worker` services sharing `./data`. Production e
 
 ### Reader page-flip implementation
 
-- Before changing `src/pages/stage/flip-book.tsx`, read the "阅读页实现要点" section in `docs/progress.md`.
+- Before changing `src/pages/stage/flip-book.tsx`, read section 3.2 of `docs/05-tech-design.md`.
 - The component intentionally uses `page-flip` HTML mode, manages its DOM imperatively, and does not use `showCover`. The library overwrites page inline styles and removes its root during `destroy()`, so preserve the wrapper/inner-element/dynamic-root structure.
 - Portrait books use a two-page spread only in landscape; landscape books stay single-page. Rebuild on layout changes while preserving the current page.
 - Keep the bounded image-loading window around the visible pages to avoid excessive memory use on tablets, and always retain the cover image for the close-book animation.
