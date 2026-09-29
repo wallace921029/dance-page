@@ -20,11 +20,19 @@ export function useCreateInvite() {
   });
 }
 
+/** 删除没被用过的邀请码（未使用、已过期、已作废）；已使用的要保留 */
+export function useDeleteInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/admin/invites/${id}`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: invitesKey }),
+  });
+}
+
 export function useRevokeInvite() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) =>
-      (await api.post<Invite>(`/admin/invites/${id}/revoke`)).data,
+    mutationFn: async (id: number) => (await api.post<Invite>(`/admin/invites/${id}/revoke`)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: invitesKey }),
   });
 }

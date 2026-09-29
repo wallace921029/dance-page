@@ -50,3 +50,18 @@ def revoke_invite(invite_id: int, _admin: CurrentAdmin, db: DbSession) -> Invite
         invite.revoked_at = utcnow()
         db.commit()
     return InviteOut.model_validate(invite)
+
+
+@router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_invite(invite_id: int, _admin: CurrentAdmin, db: DbSession) -> None:
+    """删除邀请码：没被用过的（未使用、已过期、已作废）都可以删；已使用的要保留，
+    因为它记录着读者是用哪个邀请码注册的。删除后注册链接立即失效。"""
+    invite = db.get(InviteCode, invite_id)
+    if invite is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "邀请码不存在")
+    if invite.used_at is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "该邀请码已被使用，需要保留注册记录，无法删除"
+        )
+    db.delete(invite)
+    db.commit()

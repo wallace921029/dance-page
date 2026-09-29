@@ -1,7 +1,17 @@
 import { useState } from "react";
-import { Copy, Plus, Ticket } from "lucide-react";
-import { useCreateInvite, useInvites, useRevokeInvite } from "@/api/invites";
+import { Copy, Plus, Ticket, Trash2 } from "lucide-react";
+import { useCreateInvite, useDeleteInvite, useInvites, useRevokeInvite } from "@/api/invites";
 import type { Invite, InviteStatus } from "@/api/types";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -71,7 +81,6 @@ export default function AdminInvitesPage() {
   const { data: invites, isPending, error } = useInvites();
   useDocumentTitle("用户管理 · 邀请码");
   const create = useCreateInvite();
-  const revoke = useRevokeInvite();
   const [validDays, setValidDays] = useState(7);
 
   return (
@@ -155,37 +164,7 @@ export default function AdminInvitesPage() {
                       {formatDateTime(invite.expires_at)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {invite.status === "unused" && (
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void copyRegisterLink(invite)}
-                          >
-                            <Copy />
-                            复制注册链接
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive"
-                            disabled={revoke.isPending}
-                            onClick={() =>
-                              revoke.mutate(invite.id, {
-                                onSuccess: () => toast.add({ title: "已作废", type: "success" }),
-                                onError: (err) =>
-                                  toast.add({
-                                    title: "作废失败",
-                                    description: getErrorMessage(err),
-                                    type: "error",
-                                  }),
-                              })
-                            }
-                          >
-                            作废
-                          </Button>
-                        </div>
-                      )}
+                      <InviteActions invite={invite} />
                     </TableCell>
                   </AnimatedTableRow>
                 ))}
@@ -195,5 +174,94 @@ export default function AdminInvitesPage() {
         </Reveal>
       )}
     </>
+  );
+}
+
+/** 一行邀请码的操作：未使用的可以复制链接、作废；没被用过的（未使用、已过期、已作废）都可以删除 */
+function InviteActions({ invite }: { invite: Invite }) {
+  const revoke = useRevokeInvite();
+  return (
+    <div className="flex justify-end gap-1">
+      {invite.status === "unused" && (
+        <>
+          <Button size="sm" variant="ghost" onClick={() => void copyRegisterLink(invite)}>
+            <Copy />
+            复制注册链接
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            disabled={revoke.isPending}
+            onClick={() =>
+              revoke.mutate(invite.id, {
+                onSuccess: () => toast.add({ title: "已作废", type: "success" }),
+                onError: (err) =>
+                  toast.add({
+                    title: "作废失败",
+                    description: getErrorMessage(err),
+                    type: "error",
+                  }),
+              })
+            }
+          >
+            作废
+          </Button>
+        </>
+      )}
+      {invite.status !== "used" && <DeleteInviteButton invite={invite} />}
+    </div>
+  );
+}
+
+function DeleteInviteButton({ invite }: { invite: Invite }) {
+  const remove = useDeleteInvite();
+  const [open, setOpen] = useState(false);
+  const code = formatInviteCode(invite.code);
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" />
+        }
+      >
+        <Trash2 />
+        删除
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>删除邀请码 {code}？</AlertDialogTitle>
+          <AlertDialogDescription>
+            {invite.status === "unused"
+              ? "这个邀请码还没有被使用，删除后已经发出去的注册链接会立即失效。"
+              : "删除后从列表里消失，无法恢复。"}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            disabled={remove.isPending}
+            onClick={() =>
+              remove.mutate(invite.id, {
+                onSuccess: () => {
+                  setOpen(false);
+                  toast.add({ title: `已删除 ${code}`, type: "success" });
+                },
+                onError: (err) =>
+                  toast.add({
+                    title: "删除失败",
+                    description: getErrorMessage(err),
+                    type: "error",
+                  }),
+              })
+            }
+          >
+            {remove.isPending && <Spinner />}
+            删除
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

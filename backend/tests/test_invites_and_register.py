@@ -133,3 +133,46 @@ def test_invite_list_newest_first(admin):
     first = create_invite(admin)
     second = create_invite(admin)
     assert [i["id"] for i in admin.get("/api/admin/invites").json()] == [second["id"], first["id"]]
+
+
+def test_delete_unused_invite_invalidates_link(admin, client):
+    keep = create_invite(admin)
+    gone = create_invite(admin)
+    assert admin.delete(f"/api/admin/invites/{gone['id']}").status_code == 204
+    assert [i["id"] for i in admin.get("/api/admin/invites").json()] == [keep["id"]]
+    res = register(client, gone["code"], "xiaoming")
+    assert res.status_code == 400 and "不存在" in res.json()["detail"]
+    assert register(client, keep["code"], "xiaoming").status_code == 201
+
+
+def test_delete_revoked_and_expired_invites(admin, advance):
+    revoked = create_invite(admin)
+    admin.post(f"/api/admin/invites/{revoked['id']}/revoke")
+    expiring = create_invite(admin, valid_days=1)
+    advance(timedelta(days=1, seconds=1))
+    statuses = {i["id"]: i["status"] for i in admin.get("/api/admin/invites").json()}
+    assert statuses == {revoked["id"]: "revoked", expiring["id"]: "expired"}
+    assert admin.delete(f"/api/admin/invites/{revoked['id']}").status_code == 204
+    assert admin.delete(f"/api/admin/invites/{expiring['id']}").status_code == 204
+    assert admin.get("/api/admin/invites").json() == []
+
+
+def test_cannot_delete_used_invite(admin, client):
+    invite = create_invite(admin)
+    register(client, invite["code"], "xiaoming")
+    res = admin.delete(f"/api/admin/invites/{invite['id']}")
+    assert res.status_code == 409
+    assert "保留" in res.json()["detail"]
+    [listed] = admin.get("/api/admin/invites").json()
+    assert listed["status"] == "used" and listed["used_by"]["username"] == "xiaoming"
+
+
+def test_delete_unknown_invite(admin):
+    assert admin.delete("/api/admin/invites/999").status_code == 404
+
+
+def test_delete_invite_requires_admin(admin, reader, client):
+    invite = create_invite(admin)
+    assert reader.delete(f"/api/admin/invites/{invite['id']}").status_code == 403
+    assert client.delete(f"/api/admin/invites/{invite['id']}").status_code == 401
+    assert len(admin.get("/api/admin/invites").json()) == 2  # 邀请码 + reader 夹具用掉的那个
