@@ -52,12 +52,19 @@ class ProviderDefaults:
     model_suggestions: tuple[str, ...] = ()
     # 该能力需要该服务商的哪些凭据
     required_fields: tuple[str, ...] = ("api_key",)
-    # 仅视频：已知模型的可选项；未知模型用 video_fallback
+    # 仅视频：已知模型的可选项，键是模型名或模型名前缀（火山的模型名带日期后缀，
+    # 如 doubao-seedance-2-0-260128）；都对不上时用 video_fallback
     video_models: dict[str, VideoOptions] = field(default_factory=dict)
     video_fallback: VideoOptions | None = None
 
     def video_options(self, model: str) -> VideoOptions | None:
-        return self.video_models.get(model, self.video_fallback)
+        if model in self.video_models:
+            return self.video_models[model]
+        # 最长的前缀优先：doubao-seedance-2-0-fast 不会被当成 doubao-seedance-2-0
+        prefixes = [key for key in self.video_models if model.startswith(key)]
+        if prefixes:
+            return self.video_models[max(prefixes, key=len)]
+        return self.video_fallback
 
 
 @dataclass(frozen=True)
@@ -141,26 +148,36 @@ CAPABILITIES: dict[CapabilityId, Capability] = {
     "video": Capability(
         id="video",
         name="动画视频",
-        description="首尾帧都用原页面图片，让画面里的主角做一个简单的循环动作",
+        description="以原页面图片为首帧，让画面里的主角动起来；生成后正放再倒放，做成无缝循环",
         providers={
             "dashscope": ProviderDefaults(
                 base_url=_DASHSCOPE_BASE_URL,
-                model="wan2.2-kf2v-flash",
-                model_suggestions=("wan2.2-kf2v-flash", "wanx2.1-kf2v-plus"),
+                model="wan2.2-i2v-flash",
+                model_suggestions=("wan2.2-i2v-flash", "wan2.6-i2v-flash"),
                 video_models={
-                    # 万相首尾帧模型的时长固定 5 秒
-                    "wan2.2-kf2v-flash": VideoOptions((5,), ("480P", "720P", "1080P"), 5, "720P"),
+                    # 万相图生视频（只给首帧，D99）；清晰度默认取模型支持的最低一档（D102）
+                    "wan2.2-i2v-flash": VideoOptions((5,), ("480P", "720P", "1080P"), 5, "480P"),
+                    "wan2.6-i2v-flash": VideoOptions((3, 5, 10), ("720P", "1080P"), 5, "720P"),
+                    # 首尾帧模型（D96 起用过；首尾帧相同时几乎不动，不再推荐）
+                    "wan2.2-kf2v-flash": VideoOptions((5,), ("480P", "720P", "1080P"), 5, "480P"),
                     "wanx2.1-kf2v-plus": VideoOptions((5,), ("720P",), 5, "720P"),
                 },
-                video_fallback=VideoOptions((5,), ("480P", "720P", "1080P"), 5, "720P"),
+                video_fallback=VideoOptions((5,), ("480P", "720P", "1080P"), 5, "480P"),
             ),
             "volcengine": ProviderDefaults(
                 base_url=_ARK_BASE_URL,
                 model="",
-                # Seedance 的实际可选范围在试验（A0）时按所开通的模型确认
-                video_fallback=VideoOptions(
-                    (3, 4, 5, 6, 8, 10), ("480p", "720p", "1080p"), 5, "720p"
-                ),
+                video_models={
+                    # Seedance 2.0：时长 4–15 秒；Fast 最高 720p
+                    "doubao-seedance-2-0-fast": VideoOptions(
+                        (4, 5, 6, 8, 10, 12, 15), ("480p", "720p"), 5, "480p"
+                    ),
+                    "doubao-seedance-2-0": VideoOptions(
+                        (4, 5, 6, 8, 10, 12, 15), ("480p", "720p", "1080p"), 5, "480p"
+                    ),
+                },
+                # 其他 Seedance 型号的范围各不相同，5 秒、10 秒各代都支持
+                video_fallback=VideoOptions((5, 10), ("480p", "720p", "1080p"), 5, "480p"),
             ),
         },
     ),

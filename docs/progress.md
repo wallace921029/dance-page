@@ -1,12 +1,12 @@
 # 项目进度与交接
 
-> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D97**（下一个 **D98**）
+> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D102**（下一个 **D103**）
 >
 > **给接手的 Claude / 开发者**：这是继续工作的入口。用户说"继续我们的任务"时，按顺序读：本文件 → `CLAUDE.md` → 与当前任务相关的 `docs/0x-*.md`，然后按"下次开始时"一节执行。每次工作结束前更新本文件（当前位置、断点、下次开始时、工作记录）。
 
 ## 一句话现状
 
-第一期（上传 → 书架 → 翻页阅读）功能全部完成，只差 iPad 真机实测和部署收尾（M4）。AI 阶段已完成 A1 AI 配置、A0 试验（D88）、A2 故事与草稿（D89–D90）、**A3 朗读 → Voice Ready**（角色音色、单元朗读、朗读稿扩充、Voice Ready 与阅读端小喇叭 / 自动朗读、开页开关，D91–D95），以及插入的**封面动画**（像魔法报纸上会动的照片，D96–D97：真实生成已跑通，第一次生成几乎不动，已修正提示词，待用户重新生成确认效果）。**下一步是 A4 动画 → Dance Ready!**，视频管道已在封面动画里建好，可直接复用。
+第一期（上传 → 书架 → 翻页阅读）功能全部完成，只差 iPad 真机实测和部署收尾（M4）。AI 阶段已完成 A1 AI 配置、A0 试验（D88）、A2 故事与草稿（D89–D90）、**A3 朗读 → Voice Ready**（角色音色、单元朗读、朗读稿扩充、Voice Ready 与阅读端小喇叭 / 自动朗读、开页开关，D91–D95），插入的**封面动画**（像魔法报纸上会动的照片，D96–D97），以及 **A4 动画 → Dance Ready!**（D98：开页循环视频、合并开页拼图、Dance Ready! 确认、阅读页播放、书架剧场招牌）。用户真实生成后反馈几乎不动，实测后把动画改为**只给首帧的图生视频 + 来回播放**、提示词改成《预言家日报》式的明显动作（D99），火山 Seedance 也能用了；**改完后还没在应用里真实生成过**。AI 阶段的功能已全部完成，接下来是用户用真实 API 看效果、iPad 真机测试和 M4 上线收尾。
 
 ## 当前位置
 
@@ -26,7 +26,7 @@ AI 阶段（设计见 06-ai-tech-design.md）
 [✅] A2 故事与草稿           绘本详情页 AI 工作台、故事分析入库、角色 CRUD、开页分别/合并、草稿编辑与单单元重写
 [✅] A3 朗读 → Voice Ready   角色音色、单元朗读、朗读稿扩充、Voice Ready 与阅读端（iPad 真机待验证）
 [✅] 封面动画（插入）       D96–D97：封面首尾帧视频、视频任务提交 / 查询调度、后台卡片、书架与阅读页封面播放；真实生成已跑通，修正后的动作效果待确认
-[⬜] A4 动画 → Dance Ready!  ← 下一步
+[✅] A4 动画 → Dance Ready!  D98：开页动画、Dance Ready!、阅读页播放、剧场招牌；D99 改为只给首帧 + 来回播放，效果待用户确认
 ```
 
 ## 在新电脑上接着做
@@ -49,11 +49,11 @@ AI 阶段（设计见 06-ai-tech-design.md）
 ### 3. 检查环境是否正常
 
 ```bash
-cd backend && uv run pytest            # 应全部通过（目前 144 个）
+cd backend && uv run pytest            # 应全部通过（目前 160 个）
 cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组件和 ai-workbench.tsx 里原有的几个警告
 ```
 
-然后登录管理后台 → "AI 配置"，每项点一次"测试连接"（豆包语音暂不支持测试，显示"已设置"即可）。**朗读和动画视频都要选阿里云百炼**（火山的豆包语音未开通合成权限、视频模型不支持首尾帧，D88）；故事与台词识别两家都可以。
+然后登录管理后台 → "AI 配置"，每项点一次"测试连接"（豆包语音暂不支持测试，显示"已设置"即可）。**朗读要选阿里云百炼**（火山的豆包语音未开通合成权限，D88）；动画视频推荐百炼 `wan2.2-i2v-flash`，火山 Seedance 也可以试（D99）；故事与台词识别两家都可以。
 
 ### 4. 环境相关的坑
 
@@ -72,20 +72,17 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 | 2 | 再提供 1–2 本 PDF，**至少一本横版**，放到 `samples/`（目前只有竖版；横版只用生成的测试 PDF 验证过） | 上线之前 | 待提供 |
 | 3–6 | AI Key 与连接测试、真实生成音色、真实生成朗读、朗读稿扩充效果 | A3 期间 | ✅ 均已完成（2026-09-29 用户确认"效果很好"） |
 | 7 | 对一本已生成朗读的书点"确认 Voice Ready"，用读者账号在电脑和 iPad 上试：书架音符、每页小喇叭、自动朗读（尤其 iPad 上从书架点开后翻页能否自动出声） | A4 之前（iPad 部分可与第 1 项一起） | 待测试 |
-| 8 | 封面动画：真实生成已跑通（约 80 秒，D96），但第一次生成的视频几乎不动；已修正提示词、描述留空时由 AI 看封面写具体动作（D97）。请在《波西和皮普尿裤子》上把动作描述留空点"重新生成"，用"放大预览"看动作幅度是否合适（会产生少量费用） | A4 之前 | 待测试 |
+| 8 | 封面动画：真实生成已跑通（约 80 秒，D96），但第一次生成的视频几乎不动；已修正提示词、描述留空时由 AI 看封面写具体动作（D97）。请在《波西和皮普尿裤子》上把动作描述留空点"重新生成"，用"放大预览"看动作幅度是否合适（会产生少量费用） | 上线之前 | 待测试 |
+| 9 | 动画改为只给首帧 + 来回播放（D99）后，用真实 API 再试：先在"AI 配置"里把动画视频换成百炼 `wan2.2-i2v-flash`（这台电脑现在存的是首尾帧模型 `wan2.2-kf2v-flash`，几乎不动；想更活可以试 `wan2.6-i2v-flash`）；已分析过的书重新分析一次（动作描述规则改了），或按新规则手改动作描述；然后重新生成封面动画和一两个开页动画（单页、合并各一），看动作是否明显、背景是否轻轻动、文字是否稳定、来回循环是否自然；满意后确认 Dance Ready!。每段约 1–3 分钟，按秒计费。对比试验的视频在 Claude 临时目录 `motion-trial/compare.html`（会话结束后可能被清理） | 上线之前 | 待测试 |
 
 ## 下次开始时（Claude 执行步骤）
 
 1. 读本文件、`CLAUDE.md`、`docs/06-ai-tech-design.md`。
-2. 向用户简要汇报当前位置：A3 已完成（D91–D95），插入的封面动画已完成（D96–D97）。先确认断点第 7、8 项的结果；第 8 项若动作仍太小或太大，调整 `backend/app/ai/video.py` 的 `COVER_PROMPT_TEMPLATE` / `NEGATIVE_PROMPT` 和 `vision.py` 的 `describe_cover_motion` 措辞（改提示词会让已生成的封面显示"需要重新生成"）。
-3. 推进 **Milestone A4 动画 → Dance Ready!**（见下方"A4"一节和 06 第 6.5、6.7、8.2 节）：
-   - 确认用户的"AI 配置"里动画视频已是百炼 `wan2.2-kf2v-flash`；
-   - **复用封面动画的视频管道**（D96）：`providers.submit_video` / `poll_video` / `download`，`app/ai/video.py`（首帧 JPEG、去音轨与 faststart），Worker 的 `waiting` 调度——把 `ai_video_unit` 加进 `VIDEO_JOB_TYPES`，提交时的参数放 `jobs.payload`；
-   - **提示词吸取 D97 的教训**：动作描述要点名具体角色和动作，不要把"幅度很小"强调过头；单元的 `motion_prompt` 已由 A2 写好草稿；
-   - 合并单元把左右两页拼成一张整图做首帧；可临时改时长、清晰度（D79，放 `payload`）；
-   - 遵守开页的"动画"开关（`ai_units.video_enabled`，D95）；
-   - 后台：单元卡片加"动画"一栏（仿照"朗读"一栏）、生成进度卡片加"动画"一行（全部生成 + Dance Ready! 确认）；
-   - 阅读端：页面上叠 `<video>`，复用 `FlipBook` 的 `overlay`、`onFlippingChange` 和按位置的 `slots`，以及 `src/pages/stage/cover-video.tsx` 的播放 / 隐藏做法；合并单元左右各显示一半；书架"Dance Ready!"剧场招牌。
+2. 向用户简要汇报当前位置：AI 阶段（A1–A4、封面动画）全部完成（最后是 A4，D98）。先确认断点第 7、8、9 项的结果：
+   - 第 8、9 项若动作太大、太小、凭空多出东西或文字抖动：调整 `backend/app/ai/video.py` 的 `PROMPT_TEMPLATE` / `NEGATIVE_PROMPT`，以及 `vision.py` 的 `MOTION_RULES` / `describe_cover_motion` 措辞（改模板会让已生成的动画显示"需要重新生成"）；也可以对比 `prompt_extend`（百炼提示词扩写，现在打开）开 / 关的效果。
+   - 火山 Seedance：用户想用时先生成一段确认请求字段（`ratio` / `resolution` / `duration` / `watermark`）被接受。
+   - 第 9 项若合并开页的视频两半与页面对不齐：看 `src/pages/stage/page-videos.tsx`（`object-fill` 拉伸铺满）和服务商输出的宽高比。
+3. 没有反馈要处理时，推进 **M4 上线收尾**（见下方"M4"一节）；iPad 真机结果回来后按清单修问题。
 
 ## 接下来要做的事
 
@@ -95,12 +92,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 - **A2 故事与草稿**（D89–D90）：分析整本故事、角色、开页分别 / 合并、台词与动作描述草稿编辑、单元重写。
 - **A3 朗读 → Voice Ready**（D91–D95）：角色音色、单元朗读、朗读稿适度扩充（原文逐字保留 + 每页补 2–3 句）、Voice Ready 确认、阅读端小喇叭与自动朗读、开页的朗读 / 动画开关与"生成本开页朗读"。
 - **封面动画**（D96–D97，插入需求）：封面首尾帧视频、视频任务提交 / 查询调度、后台"封面动画"卡片、书架与阅读页封面循环播放。
-
-### A4 动画 → Dance Ready!（见 06 第 6.5、6.7、8.2 节）
-
-- `ai_video_unit`：复用封面动画的视频管道（见"下次开始时"），合并单元拼接左右两页做首帧。
-- 后台：单元"生成动画"（可临时改时长、清晰度，D79）、预览；生成进度卡片的"动画"一行（全部生成、确认 / 取消 Dance Ready!）。
-- 阅读端：页面图上叠 `<video muted playsinline loop>`，翻页时隐藏、停稳后淡入；合并单元左右各播一半；书架"Dance Ready!"剧场招牌。
+- **A4 动画 → Dance Ready!**（D98）：Worker `ai_video_unit`（与封面动画共用提交 / 查询代码，合并单元左右拼图做首帧）、动作描述为空和封面页不生成、临时换清晰度、全部生成 / 生成本开页动画、Dance Ready! 确认；阅读页 `page-videos.tsx` 叠视频（合并单元对开铺满、竖屏各显示一半），书架"Dance Ready!"招牌 `dance-ready-sign.tsx`。
 
 ### M4 上线收尾（可与 AI 工作穿插，见 05 第 4 节）
 
@@ -112,10 +104,11 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 ## 以后再做 / 已知问题
 
 - **管理后台窄屏**：手机宽度下顶部导航放不下，页面出现横向滚动（管理后台主要在电脑上用，暂未处理；可改为窄屏收成菜单）。
-- **火山暂不支持朗读和动画**：豆包语音账号未开通合成权限（403），视频模型不支持首尾帧（D88）；选火山时"生成音色""生成朗读""生成封面动画"会提示切换到百炼（D91、D96）。按 06 第 6.3 节，火山的音色应从现成音色清单里挑，开通权限后再做；豆包语音的"测试连接"也等那时补上。
+- **火山暂不支持朗读**：豆包语音账号未开通合成权限（403，D88）；选火山时"生成音色""生成朗读"会提示切换到百炼（D91）。火山 Seedance 视频自 D99 起可用；D100 按型号内置了时长、清晰度范围（Seedance 2.0 是 4–15 秒），提交成功与否以真实生成为准，其他型号的范围如不对要补进 `catalog.py`。按 06 第 6.3 节，火山的音色应从现成音色清单里挑，开通权限后再做；豆包语音的"测试连接"也等那时补上。
 - **百炼上的旧音色不会删除**：重新生成音色只替换本地记录，百炼账号里的旧音色还在（账号有音色数量上限，本项目用量很小；需要时再接百炼的删除接口）。
-- **封面动画的文件偏大**：720P、5 秒约 6MB；书架一屏最多 8–9 本、只播看得见的，但网络慢时会晚一些才动起来。需要时可以为书架另存一份低清晰度版本。
-- **iPad 相关待验证**：卷页性能、添加到主屏幕、Web Audio 自动朗读解锁、静音视频自动播放、同时播放多个视频的内存占用。
+- **动画文件大小**：D99 起重新编码为 10 秒的来回循环，720P 约 2MB（之前 5 秒约 4–6MB）；书架一屏最多 8–9 本、只播看得见的，但网络慢时会晚一些才动起来。需要时可以为书架另存一份低清晰度版本。
+- **iPad 相关待验证**：卷页性能、添加到主屏幕、Web Audio 自动朗读解锁、静音视频自动播放、同时播放多个视频的内存占用（对开时最多 2 段开页动画，封面页另有封面动画）。
+- **开页动画加载**：阅读页只加载可见页的视频，翻到新页时要下载一会儿才淡入。需要时可以预加载下一页，或改用 480P。
 - **AI 阶段已明确不做**：文字高亮（D62）、读者自选音色（D63）、生成前的费用预估（D65）、失败自动重试（D65）。
 
 ## 给 Claude 的操作注意事项
@@ -158,6 +151,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 - [ ] 翻到最后一页出现"故事讲完啦！"提示，点"合上书本"后动画回到封面
 - [ ] 书架、登录、注册页在 iPad 上显示正常，字体（站酷小薇）加载正常
 - [ ] 封面动画（D96）：书架上的封面在动且不卡；阅读页封面翻开前在动，翻页时立即停住；静音模式下也能自动播放
+- [ ] 开页动画（D98）：Dance Ready! 的书书架上有剧场招牌；翻到有动画的页，停稳后画面淡入动起来、翻页时立即停住；合并开页横屏时两页连成一个画面、竖屏单页时左右两半对得上；翻页不卡
 - [ ] 朗读（D94）：书架上有朗读的书名前有音符；每页小喇叭点了能出声、再点停止；打开"自动朗读"后翻页停稳自动读，翻页时立刻停；从书架点开书后不用再点任何按钮，翻页也能自动出声（Web Audio 解锁）；静音开关打开时是否仍有声音（Web Audio 在 iOS 上受静音键影响，记录实际表现）
 - [ ] Safari"分享 → 添加到主屏幕"后图标、名称正确；从主屏幕打开没有地址栏，夜幕背景铺到状态栏下，按钮不被状态栏和底部横条遮挡，没有全屏按钮
 
@@ -175,13 +169,13 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 
 - **前端**（`src/`，Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui on Base UI + react-query + react-router 8 + `motion`）：
   - 阅读端（小剧场风格，`src/pages/stage/`）：登录 `/login`、注册 `/register?code=`、书架 `/`、我的收藏 `/favorites`、阅读页 `/books/:id`。主题色和字体在 `src/index.css` 的 `@theme`；书架主题 `shelf-themes.ts`、背景装饰 `shelf-backdrop.tsx`、动效 `shelf-motion.ts`、翻开过渡 `book-opening.ts`、阅读排版 `reader-layout.ts`、翻页 `flip-book.tsx`。
-  - 朗读与封面动画：`story-audio.ts`（Web Audio 单例播放器）、`use-read-aloud.ts`（自动朗读逻辑）、`read-aloud.tsx`（小喇叭、自动朗读开关）、`cover-video.tsx`（书架和阅读页的封面循环视频）；手绘图标 `doodle-*.tsx`（爱心、翻页箭头、小喇叭、音符）。
-  - 管理后台（`src/pages/admin/`）：`/admin/books`、`/admin/books/:id`（AI 工作台 `ai-workbench.tsx`：流程说明 → 故事与角色 → 封面动画 → 生成进度 → 开页列表）、`/admin/invites`、`/admin/readers`、`/admin/ai`；进场动画用 `motion.tsx`。
+  - 朗读与动画：`story-audio.ts`（Web Audio 单例播放器）、`use-read-aloud.ts`（自动朗读逻辑）、`read-aloud.tsx`（小喇叭、自动朗读开关）、`loop-video.tsx`（叠在静态画面上的循环视频：封面动画、开页动画共用）、`page-videos.tsx`（阅读页的开页动画）、`dance-ready-sign.tsx`（书架"Dance Ready!"招牌）；手绘图标 `doodle-*.tsx`（爱心、翻页箭头、小喇叭、音符）。
+  - 管理后台（`src/pages/admin/`）：`/admin/books`、`/admin/books/:id`（AI 工作台 `ai-workbench.tsx`：流程说明 → 故事与角色 → 封面动画 → 生成进度（朗读、动画各一行）→ 开页列表）、`/admin/invites`、`/admin/readers`、`/admin/ai`；进场动画用 `motion.tsx`。
   - 数据请求：`src/api/*.ts`（react-query hooks，类型 `src/api/types.ts`，AI 相关在 `src/api/ai.ts`）；路由守卫 `src/router/guards.ts`；会话过期跳回登录页（`src/lib/query-client.ts`）。
   - 添加到主屏幕：`public/manifest.webmanifest`、`public/icons/`（由 `uv run scripts/make-icons.py` 生成）。
-- **后端**（`backend/app/`，FastAPI + SQLAlchemy 2 + SQLite + Alembic，uv 管理）：账户 / 会话（`auth/`）、邀请码（`invites/`）、读者（`readers/`）、绘本与收藏（`books/`，含读者的朗读 / 封面动画文件接口）、Worker（`worker/runner.py`：拆页、分析、草稿、音色、朗读、封面视频；视频任务的 `waiting` 调度）。
-  - AI（`ai/`）：`catalog.py` / `settings.py` 配置；`providers/` 百炼 / 火山适配器（连接测试、模型列表、设计音色、合成、首尾帧视频）；`vision.py`（整本分析、单元草稿、朗读稿规则 `script_rules()`、封面动作描述）；`voices.py` 音色；`speech.py` 台词解析与朗读指纹；`audio.py` PyAV 拼接编码；`video.py` 首帧、封面提示词、视频去音轨；`spreads.py` 开页与单元；`book_router.py` 工作台接口。
-  - 测试与检查：`cd backend && uv run pytest`（144 个）、`uv run ruff check . && uv run ruff format .`；前端 `npm run build`、`npm run lint`。
+- **后端**（`backend/app/`，FastAPI + SQLAlchemy 2 + SQLite + Alembic，uv 管理）：账户 / 会话（`auth/`）、邀请码（`invites/`）、读者（`readers/`）、绘本与收藏（`books/`，含读者的朗读 / 封面动画文件接口）、Worker（`worker/runner.py`：拆页、分析、草稿、音色、朗读、封面视频、开页视频；视频任务的 `waiting` 调度）。
+  - AI（`ai/`）：`catalog.py` / `settings.py` 配置；`providers/` 百炼 / 火山适配器（连接测试、模型列表、设计音色、合成、首尾帧视频）；`vision.py`（整本分析、单元草稿、朗读稿规则 `script_rules()`、封面动作描述）；`voices.py` 音色；`speech.py` 台词解析与朗读指纹；`audio.py` PyAV 拼接编码；`video.py` 首帧（合并开页拼图）、封面 / 开页提示词与指纹、视频去音轨；`spreads.py` 开页与单元；`book_router.py` 工作台接口。
+  - 测试与检查：`cd backend && uv run pytest`（153 个）、`uv run ruff check . && uv run ruff format .`；前端 `npm run build`、`npm run lint`。
   - `backend/scripts/render_samples.py`：把 `samples/*.pdf` 渲染到 `samples/rendered/`，调整拆页参数时对比效果；`backend/scripts/ai_trial.py`：A0 试验脚本。
 - **部署**：仓库根目录 `docker-compose.yml`（api + worker）+ `.env.example`；数据在仓库根目录 `./data`；Nginx 由用户自己配置（D39）。
 
@@ -240,3 +234,8 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 | 2026-09-29 | 插入需求封面动画（D96）：迁移 `8c1f4a7d2e55`（`books` 加封面动画字段）和 `d4e6b1a9c3f7`（`jobs` 加 `payload`；原先放在同一个迁移里，用户的开发服务器已自动执行了前一版，导致缺列报错，拆成新迁移修复）；百炼首尾帧视频适配（上传凭证 + OSS 直传、提交、查询、下载）、`app/ai/video.py`、Worker 的 `waiting` 调度（15 秒查询、最多 3 个远程视频任务、查询出错重试、30 分钟超时、重启不重复提交）；接口生成 / 预览 / 启用封面动画，书架与阅读接口返回 `cover_video_url`；后台"封面动画"卡片，书架与阅读页封面叠循环视频；修复 `FlipBook` 首次排版时对开左右页算反（直接打开书或旋转后小喇叭 / 封面动画位置错位）；142 个后端测试通过；隔离环境浏览器实测 |
 | 2026-09-29 | 封面动画真实生成跑通（百炼上传凭证 + OSS 直传 + 首尾帧任务，约 80 秒），但视频几乎不动；修正提示词并在描述为空时让视觉模型看封面写具体动作（D97），后台预览放大并加"放大预览"弹窗；144 个后端测试通过 |
 | 2026-09-29 | 整理交接文档：一句话现状、断点（合并已完成的 3–6 项，新增封面动画效果确认）、下次开始时（A4 复用视频管道、吸取 D97 提示词教训）、待做（已完成的 AI 里程碑收成摘要）、已知问题（火山限制、封面视频体积）、操作注意事项（改为 macOS 的做法、迁移注意事项）、代码现状（补上 A2–封面动画的模块）；同步 `CLAUDE.md` 的项目状态 |
+| 2026-09-29 | 完成 A4 动画 → Dance Ready!（D98）：Worker `ai_video_unit`（提交 / 查询与封面动画共用 `_submit_remote_video` / `_poll_remote_video`，合并单元左右拼图做首帧，查询期间改了分别 / 合并则结果作废）；接口 `POST/GET /admin/ai/units/{uid}/video`（可临时指定时长、清晰度）、`POST …/spreads/{first_page}/video`、`generate-all?type=video`、`PUT/DELETE …/dance-ready`，读者 `GET /api/books/{id}/ai/video/{uid}`；分析和重写草稿的提示词加动作描述规则（没有可动内容留空、文字不动）；后台进度卡片加"动画"一行、单元"动画"栏与预览、"生成本开页动画"，Voice Ready / Dance Ready! 确认合成一个 `ReadyControl`；阅读页 `page-videos.tsx`，`cover-video.tsx` 改名 `loop-video.tsx`，书架剧场招牌（新增字体包 `@fontsource/zcool-qingke-huangyou`，只加载拉丁字符）；153 个后端测试通过；隔离环境用本地生成的测试视频做浏览器实测（对开合并铺满两页、竖屏左右各一半、翻页时隐藏、招牌字体加载正常） |
+| 2026-09-29 | 动画改为只给首帧的图生视频 + 来回播放（D99）：用户反馈真实生成的封面和开页动画几乎不动；同一页对比试验（首尾帧 + 原提示词 0.7%、首尾帧 + 放开的提示词 0.6%、`wan2.2-i2v-flash` 17.3%、`wan2.6-i2v-flash` 18.4% 的像素有变化），用户认为首尾帧不重要且让 Seedance 不能用。百炼改用 `video-generation` 接口（`img_url`，默认 `wan2.2-i2v-flash`，打开提示词扩写，能选时长的模型才传 `duration`），首尾帧模型仍可选；火山 Seedance 图生视频（base64 首帧、`ratio: adaptive`）；`video.save_loop_video` 正放 + 倒放重新编码（帧先存磁盘临时文件）；提示词改为《预言家日报》式的明显来回动作 + 背景轻微动作，动作描述只写看得见的；157 个后端测试通过 |
+| 2026-09-29 | 修复火山 Seedance 2.0 提交 400（D100）：时长按型号内置（2.0 为 4–15 秒）、型号名前缀匹配、已保存的不合法设置生成时改用默认值；后台"AI 配置"页同样按前缀取可选项；158 个后端测试通过 |
+| 2026-09-29 | 封面动画也能临时选时长和清晰度（D101）：新增迁移 `a7c2e9d51b34`（`books.cover_video_duration_s`，**用户的开发服务器会在重启 API 时自动执行**）；`POST …/cover-video` 接受 `duration` / `resolution`，校验逻辑与单元共用（`_video_overrides`）；"需要重新生成"按生成时的参数比较；前端新增 `video-options.tsx`（"生成选项"小弹窗），封面卡片和动画单元共用，替换了单元里原来只能换清晰度的下拉菜单；隔离环境浏览器实测 wan2.2（时长灰掉）和 wan2.6（可选时长）两种模型，请求体带的就是所选值；160 个后端测试通过 |
+| 2026-09-29 | 视频清晰度默认改为 480（D102）：`catalog.py` 里各模型的默认值取模型支持的最低一档；已保存的设置不变；160 个后端测试通过 |

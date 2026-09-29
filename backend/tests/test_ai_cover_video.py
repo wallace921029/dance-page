@@ -1,4 +1,4 @@
-"""封面动画（D96）：上传首帧、提交首尾帧任务、定时查询、下载处理、启用后读者可见。"""
+"""封面动画（D96、D99）：上传首帧、提交图生视频任务、定时查询、下载后做成来回循环、启用后读者可见。"""
 
 import io
 import json
@@ -16,7 +16,9 @@ from app.models import Job
 from app.worker.runner import MAX_REMOTE_VIDEOS, VIDEO_MAX_WAIT
 
 API = "https://dashscope.aliyuncs.com/api/v1"
-SUBMIT_URL = f"{API}/services/aigc/image2video/video-synthesis"
+SUBMIT_URL = f"{API}/services/aigc/video-generation/video-synthesis"
+# 首尾帧模型（kf2v）的提交地址
+KEYFRAMES_URL = f"{API}/services/aigc/image2video/video-synthesis"
 POLL = timedelta(seconds=16)
 
 
@@ -50,7 +52,7 @@ RESULT_MP4 = make_mp4()
 
 
 class FakeWan:
-    """假的百炼：上传凭证、OSS 直传、提交首尾帧任务、查询（先 RUNNING 再给出结果）、下载。"""
+    """假的百炼：上传凭证、OSS 直传、提交视频任务、查询（先 RUNNING 再给出结果）、下载。"""
 
     def __init__(self):
         self.requests: list[httpx.Request] = []
@@ -60,7 +62,7 @@ class FakeWan:
         self.analysis: dict | None = {"motion": "兔子眨眨眼，小老鼠的尾巴轻轻摆动"}
 
     def submits(self) -> list[httpx.Request]:
-        return [r for r in self.requests if str(r.url) == SUBMIT_URL]
+        return [r for r in self.requests if str(r.url) in (SUBMIT_URL, KEYFRAMES_URL)]
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -85,7 +87,7 @@ class FakeWan:
             )
         if url == "https://oss.example.com":
             return httpx.Response(200)
-        if url == SUBMIT_URL:
+        if url in (SUBMIT_URL, KEYFRAMES_URL):
             return httpx.Response(
                 200, json={"output": {"task_id": "task-1", "task_status": "PENDING"}}
             )
@@ -120,8 +122,8 @@ def cover(admin: TestClient, book_id: str) -> dict:
     return admin.get(f"/api/admin/books/{book_id}/ai").json()["cover"]
 
 
-def generate(admin: TestClient, book_id: str):
-    return admin.post(f"/api/admin/books/{book_id}/ai/cover-video")
+def generate(admin: TestClient, book_id: str, **body):
+    return admin.post(f"/api/admin/books/{book_id}/ai/cover-video", json=body or None)
 
 
 def run_to_ready(admin, worker, advance, book_id: str) -> dict:
@@ -147,23 +149,25 @@ def test_cover_video_flow(admin, reader, app, worker, advance, ready_book, wan):
     assert generate(admin, book_id).json()["job_id"] == res.json()["job_id"]  # 不重复排队
     assert cover(admin, book_id)["status"] == "queued"
 
-    # 提交：先上传首帧到服务商的临时存储，首尾帧都用它
+    # 提交：先上传首帧到服务商的临时存储，图生视频只给首帧（D99）
     assert worker.run_once() is True
     upload = next(r for r in wan.requests if str(r.url) == "https://oss.example.com")
     assert b'name="key"' in upload.content and b"dashscope-instant/abc/frame.jpg" in upload.content
     (submit,) = wan.submits()
+    assert str(submit.url) == SUBMIT_URL
     assert submit.headers["X-DashScope-Async"] == "enable"
     assert submit.headers["X-DashScope-OssResourceResolve"] == "enable"
     body = json.loads(submit.content)
-    assert body["model"] == "wan2.2-kf2v-flash"
-    assert body["input"]["first_frame_url"] == "oss://dashscope-instant/abc/frame.jpg"
-    assert body["input"]["last_frame_url"] == body["input"]["first_frame_url"]
+    assert body["model"] == "wan2.2-i2v-flash"
+    assert body["input"]["img_url"] == "oss://dashscope-instant/abc/frame.jpg"
+    assert "last_frame_url" not in body["input"]
     assert "小熊轻轻眨眼" in body["input"]["prompt"]
-    assert "清楚可见" in body["input"]["prompt"]
+    assert "预言家日报" in body["input"]["prompt"] and "来回往复" in body["input"]["prompt"]
     # 管理员填了描述：不再让视觉模型写
     assert not any(r.url.path.endswith("/chat/completions") for r in wan.requests)
     assert "镜头移动" in body["input"]["negative_prompt"]
-    assert body["parameters"] == {"resolution": "720P", "prompt_extend": False}
+    # wan2.2 的时长固定 5 秒，不传
+    assert body["parameters"] == {"resolution": "480P", "prompt_extend": True}
 
     # 等待查询期间不占用 Worker，界面继续轮询
     assert cover(admin, book_id)["status"] == "running"
@@ -179,17 +183,21 @@ def test_cover_video_flow(admin, reader, app, worker, advance, ready_book, wan):
     done = cover(admin, book_id)
     assert done["status"] == "ready"
     assert done["error"] is None
-    assert done["resolution"] == "720P"
+    assert done["resolution"] == "480P" and done["duration_s"] == 5
     assert done["outdated"] is False and done["frame_changed"] is False
     assert done["video_url"] == f"/api/admin/books/{book_id}/ai/cover-video?v=1"
     assert len(wan.submits()) == 1
 
-    # 后台预览：去掉了音轨
+    # 后台预览：去掉了音轨；正放再倒放，首尾都是原画（24 帧 → 24 + 22 帧）
     res = admin.get(done["video_url"])
     assert res.status_code == 200
     assert res.headers["content-type"] == "video/mp4"
     with av.open(io.BytesIO(res.content)) as container:
         assert [s.type for s in container.streams] == ["video"]
+        levels = [int(f.to_ndarray(format="gray").mean()) for f in container.decode(video=0)]
+    assert len(levels) == 46
+    assert levels[:24] == sorted(levels[:24]) and levels[24:] == sorted(levels[24:], reverse=True)
+    assert abs(levels[-1] - levels[0]) < abs(levels[23] - levels[0])
 
     # 启用前读者看不到
     shelf = next(b for b in reader.get("/api/books").json() if b["id"] == book_id)
@@ -322,19 +330,60 @@ def test_remote_video_limit(admin, app, worker, ready_book, pdf_bytes, wan):
     assert cover(admin, book_id)["status"] == "queued"
 
 
-def test_non_kf2v_model_fails_with_hint(admin, worker, ready_book, wan):
+def test_unknown_model_fails_with_hint(admin, worker, ready_book, wan):
     book_id = ready_book["id"]
     res = admin.put(
         "/api/admin/ai/capabilities/video",
-        json={"provider": "dashscope", "model": "wan2.5-i2v", "base_url": API, "options": {}},
+        json={"provider": "dashscope", "model": "wan2.5-t2v", "base_url": API, "options": {}},
     )
     assert res.status_code == 200, res.text
     generate(admin, book_id)
     worker.run_once()
     failed = cover(admin, book_id)
     assert failed["status"] == "failed"
-    assert "kf2v" in failed["error"]
+    assert "图生视频" in failed["error"]
     assert wan.submits() == []
+
+
+def test_keyframes_model_still_works(admin, worker, advance, ready_book, wan):
+    """首尾帧模型（D96 用过）仍可选：首帧和尾帧都用同一张图。"""
+    book_id = ready_book["id"]
+    admin.put(
+        "/api/admin/ai/capabilities/video",
+        json={
+            "provider": "dashscope",
+            "model": "wan2.2-kf2v-flash",
+            "base_url": API,
+            "options": {},
+        },
+    )
+    assert run_to_ready(admin, worker, advance, book_id)["status"] == "ready"
+    (submit,) = wan.submits()
+    assert str(submit.url) == KEYFRAMES_URL
+    body = json.loads(submit.content)["input"]
+    assert (
+        body["first_frame_url"] == body["last_frame_url"] == "oss://dashscope-instant/abc/frame.jpg"
+    )
+
+
+def test_duration_sent_when_model_allows_choice(admin, worker, ready_book, wan):
+    admin.put(
+        "/api/admin/ai/capabilities/video",
+        json={
+            "provider": "dashscope",
+            "model": "wan2.6-i2v-flash",
+            "base_url": API,
+            "options": {"duration": 3, "resolution": "1080P"},
+        },
+    )
+    generate(admin, ready_book["id"])
+    worker.run_once()
+    (submit,) = wan.submits()
+    assert json.loads(submit.content)["parameters"] == {
+        "resolution": "1080P",
+        "prompt_extend": True,
+        "duration": 3,
+    }
 
 
 def test_requires_key(admin, app, ready_book):
@@ -381,7 +430,7 @@ def test_empty_motion_is_written_from_cover(admin, worker, ready_book, wan):
 
     (chat,) = [r for r in wan.requests if r.url.path.endswith("/chat/completions")]
     content = json.loads(chat.content)["messages"][0]["content"]
-    assert "会动的照片" in content[0]["text"]
+    assert "会动的魔法照片" in content[0]["text"] and "来回往复" in content[0]["text"]
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
     assert cover(admin, book_id)["motion_prompt"] == "兔子眨眨眼，小老鼠的尾巴轻轻摆动"
@@ -398,3 +447,44 @@ def test_motion_writer_failure(admin, worker, ready_book, wan):
     assert failed["status"] == "failed"
     assert "自动写动作描述失败" in failed["error"]
     assert wan.submits() == []
+
+
+def use_model(admin, model: str, **options) -> None:
+    res = admin.put(
+        "/api/admin/ai/capabilities/video",
+        json={"provider": "dashscope", "model": model, "base_url": API, "options": options},
+    )
+    assert res.status_code == 200, res.text
+
+
+def test_temporary_duration_and_resolution(admin, worker, advance, ready_book, wan):
+    """生成封面动画时可临时换时长、清晰度（D79）：只对这一次生效，不算"需要重新生成"。"""
+    book_id = ready_book["id"]
+    use_model(admin, "wan2.6-i2v-flash")
+    done_by_default = run_to_ready(admin, worker, advance, book_id)
+    assert (done_by_default["duration_s"], done_by_default["resolution"]) == (5, "720P")
+
+    wan.poll_statuses = ["SUCCEEDED"]
+    assert generate(admin, book_id, duration=10, resolution="1080P").status_code == 202
+    worker.run_once()
+    advance(POLL)
+    worker.run_once()
+    chosen = json.loads(wan.submits()[-1].content)["parameters"]
+    assert chosen == {"resolution": "1080P", "prompt_extend": True, "duration": 10}
+    done = cover(admin, book_id)
+    assert (done["duration_s"], done["resolution"]) == (10, "1080P")
+    assert done["outdated"] is False  # AI 配置里的默认值仍是 5 秒 · 720P，但按生成时的参数比较
+
+    # 改了动作描述才算过期
+    admin.patch(f"/api/admin/books/{book_id}/ai", json={"cover_motion_prompt": "小熊跳一跳"})
+    assert cover(admin, book_id)["outdated"] is True
+
+
+def test_temporary_options_are_validated(admin, ready_book, wan):
+    book_id = ready_book["id"]
+    res = generate(admin, book_id, resolution="4K")
+    assert res.status_code == 400 and "清晰度" in res.json()["detail"]
+    res = generate(admin, book_id, duration=10)  # 默认模型 wan2.2 固定 5 秒
+    assert res.status_code == 400 and "5 秒" in res.json()["detail"]
+    assert cover(admin, book_id)["status"] == "none"
+    assert generate(admin, book_id, resolution="480P").status_code == 202

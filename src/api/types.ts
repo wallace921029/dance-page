@@ -100,8 +100,10 @@ export interface ShelfBook {
 export interface ReaderUnit {
   /** 单页，或合并生成的左右两页 */
   pages: number[];
+  /** 朗读（Voice Ready 后才有） */
   audio_url: string | null;
   audio_duration_ms: number | null;
+  /** 开页动画（Dance Ready! 后才有）；合并单元的视频是两页宽，左页放左半边、右页放右半边（D74） */
   video_url: string | null;
 }
 
@@ -196,7 +198,7 @@ export interface AiTestResult {
 
 export interface AiModelOption {
   id: string;
-  /** 如"推荐""支持首尾帧""即将下线" */
+  /** 如"推荐""即将下线" */
   note: string | null;
   retiring: boolean;
 }
@@ -270,6 +272,12 @@ export interface AiUnit {
   audio_url: string | null;
   /** 台词或音色在生成朗读之后改过 */
   audio_outdated: boolean;
+  /** 已生成的动画（后台预览）；重新生成期间仍可看旧的 */
+  video_url: string | null;
+  /** 动作描述或视频模型在生成动画之后改过 */
+  video_outdated: boolean;
+  /** 第 1 页是封面：由封面动画负责，不单独生成开页动画 */
+  video_by_cover: boolean;
 }
 
 export interface Spread {
@@ -307,7 +315,8 @@ export interface CoverVideo {
   /** 已生成的视频（后台预览） */
   video_url: string | null;
   resolution: string | null;
-  /** 动作描述、模型或清晰度在生成之后改过 */
+  duration_s: number | null;
+  /** 动作描述或视频模型在生成之后改过 */
   outdated: boolean;
   /** 生成之后换了封面，旧动画对不上，读者看不到 */
   frame_changed: boolean;
@@ -323,6 +332,8 @@ export interface BookAi {
   spreads: Spread[];
   running_jobs: AiJob[];
   cover: CoverVideo;
+  /** 当前动画视频模型可选的时长、清晰度，默认值来自 AI 配置（生成时可临时修改，D79） */
+  video_options: AiVideoOptions | null;
 }
 
 export interface CharacterCreateInput {

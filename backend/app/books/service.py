@@ -42,6 +42,15 @@ def reader_audio_url(book: Book, unit: AiUnit) -> str:
     return f"/api/books/{book.id}/ai/audio/{unit.id}?v={unit.audio_version}"
 
 
+def video_by_cover(book: Book, unit: AiUnit) -> bool:
+    """第 1 页是封面时，这一页由封面动画负责，不单独生成开页动画（A4）。"""
+    return book.cover_page_index == 0 and unit.first_page_index == 0
+
+
+def reader_video_url(book: Book, unit: AiUnit) -> str:
+    return f"/api/books/{book.id}/ai/video/{unit.id}?v={unit.video_version}"
+
+
 def reader_cover_video_url(book: Book) -> str | None:
     """已启用、且与当前封面对得上的封面动画（D96）"""
     frame = f"{book.cover_page_index}:{book.assets_version}"

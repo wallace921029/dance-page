@@ -171,8 +171,15 @@ function draftFrom(config: AiProviderConfig): Draft {
   };
 }
 
+/** 与后端 catalog.py 的规则一致：先按模型名，再按最长的前缀（火山的模型名带日期后缀），最后用兜底 */
 function videoOptionsFor(config: AiProviderConfig, model: string): AiVideoOptions | null {
-  return config.video_models[model.trim()] ?? config.video_fallback;
+  const name = model.trim();
+  const exact = config.video_models[name];
+  if (exact) return exact;
+  const prefix = Object.keys(config.video_models)
+    .filter((key) => name.startsWith(key))
+    .sort((a, b) => b.length - a.length)[0];
+  return (prefix && config.video_models[prefix]) || config.video_fallback;
 }
 
 /** 换了模型后，时长和清晰度不在新模型的可选范围内时改用新模型的默认值 */

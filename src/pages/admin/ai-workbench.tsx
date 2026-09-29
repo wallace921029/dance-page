@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import type { UseMutationResult } from "@tanstack/react-query";
 import {
   AudioLines,
   BadgeCheck,
@@ -8,6 +10,7 @@ import {
   Edit2,
   Film,
   Maximize2,
+  Settings2,
   MoreHorizontal,
   Play,
   Plus,
@@ -27,11 +30,14 @@ import {
   useDeleteCharacter,
   useDesignVoice,
   useDraftAiUnit,
-  useGenerateAllAudio,
+  useGenerateAll,
   useGenerateCoverVideo,
   useGenerateSpreadAudio,
+  useGenerateSpreadVideo,
   useGenerateUnitAudio,
+  useGenerateUnitVideo,
   useSetCoverVideoEnabled,
+  useSetDanceReady,
   useSetVoiceReady,
   useUpdateSpreadSwitches,
   useUpdateAiUnit,
@@ -43,6 +49,7 @@ import type {
   AdminBookDetail,
   AiLineItem,
   AiUnit,
+  AiVideoOptions,
   BookAi,
   BookPage,
   Character,
@@ -75,9 +82,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -99,11 +108,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toast";
 import { getErrorMessage } from "@/lib/api";
+import { VideoOptionsPopover, type VideoChoice } from "@/pages/admin/video-options";
 
 /** 对开时"分别生成"的两页的朗读顺序（D69） */
 const READ_ORDER_ITEMS = [
@@ -153,8 +164,8 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
             页面与 AI 工作台
           </CardTitle>
           <CardDescription>
-            {book.page_count} 页 · 先分析整本故事并校对台词，为角色生成音色，再生成朗读并确认 Voice
-            Ready。
+            {book.page_count} 页 · 先分析整本故事并校对台词和动作描述；朗读：为角色生成音色，再生成朗读并确认
+            Voice Ready；动画：为开页生成循环动画并确认 Dance Ready!。两者相互独立。
           </CardDescription>
         </CardHeader>
         {!analyzed && (
@@ -172,11 +183,13 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
       {/* 封面动画（D96）：与朗读、开页动画相互独立 */}
       <CoverAnimationCard book={book} bookAi={bookAi} />
 
-      {/* 各类 AI 产物的进度和一键操作，是下方开页列表的总览（A4 在这里加"动画"一行） */}
+      {/* 各类 AI 产物的进度和一键操作，是下方开页列表的总览 */}
       {analyzed && (
         <Card>
-          <CardContent>
+          <CardContent className="space-y-4">
             <AudioPipelineRow bookId={book.id} bookAi={bookAi} />
+            <Separator />
+            <VideoPipelineRow bookId={book.id} bookAi={bookAi} />
           </CardContent>
         </Card>
       )}
@@ -190,6 +203,7 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
             book={book}
             spread={spread}
             characters={bookAi.characters}
+            videoOptions={bookAi.video_options}
             onSetCover={onSetCover}
             isSettingCover={isSettingCover}
           />
@@ -204,7 +218,7 @@ export function AiWorkbench({ book, onSetCover, isSettingCover }: AiWorkbenchPro
 // ============================================================================
 
 function AudioPipelineRow({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
-  const generateAll = useGenerateAllAudio(bookId);
+  const generateAll = useGenerateAll(bookId, "audio");
   const updateAi = useUpdateBookAi(bookId);
 
   const allUnits = bookAi.spreads.flatMap((s) => s.units);
@@ -318,26 +332,95 @@ function AudioPipelineRow({ bookId, bookAi }: { bookId: string; bookAi: BookAi }
 }
 
 // ============================================================================
-// Voice Ready 确认
+// Voice Ready / Dance Ready! 确认
 // ============================================================================
 
 function VoiceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
   const setVoiceReady = useSetVoiceReady(bookId);
-  const [open, setOpen] = useState(false);
-  const isReady = bookAi.voice_ready_at !== null;
-
   const units = bookAi.spreads.flatMap((s) => s.units).filter((u) => u.audio_enabled);
   const withAudio = units.filter((u) => u.audio_url).length;
   const missing = units.filter((u) => !u.audio_url && u.lines.some((l) => l.text.trim())).length;
   const outdated = units.filter((u) => u.audio_url && u.audio_outdated).length;
 
+  return (
+    <ReadyControl
+      name="Voice Ready"
+      isReady={bookAi.voice_ready_at !== null}
+      mutation={setVoiceReady}
+      emptyHint={withAudio === 0 ? "还没有生成任何朗读" : null}
+      confirmText={`确认后，读者在书架上会看到音乐符号，阅读时有朗读的页面会出现小喇叭。已生成朗读的单元：${withAudio} 个。`}
+      cancelText="取消后读者听不到这本书的朗读，书架上的音乐符号也会去掉；已生成的朗读会保留，可以随时再确认。"
+      confirmedToast="读者现在可以听这本书的朗读了"
+      cancelledToast="读者暂时听不到这本书的朗读"
+      warnings={[
+        missing > 0 && `还有 ${missing} 个有台词的单元没有生成朗读，这些页面不会出现小喇叭。`,
+        outdated > 0 && `${outdated} 个单元的台词或音色改过但还没重新生成，读者听到的是旧版朗读。`,
+      ]}
+    />
+  );
+}
+
+function DanceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
+  const setDanceReady = useSetDanceReady(bookId);
+  const units = animatableUnits(bookAi).filter((u) => u.video_enabled);
+  const withVideo = units.filter((u) => u.video_url).length;
+  const missing = units.filter((u) => !u.video_url).length;
+  const outdated = units.filter((u) => u.video_url && u.video_outdated).length;
+
+  return (
+    <ReadyControl
+      name="Dance Ready!"
+      isReady={bookAi.dance_ready_at !== null}
+      mutation={setDanceReady}
+      emptyHint={withVideo === 0 ? "还没有生成任何动画" : null}
+      confirmText={`确认后，读者在书架上会看到"Dance Ready!"招牌，阅读时有动画的页面会动起来。已生成动画的单元：${withVideo} 个。`}
+      cancelText="取消后读者看不到这本书的开页动画，书架上的招牌也会去掉；已生成的动画会保留，可以随时再确认。"
+      confirmedToast="读者现在可以看到这本书的开页动画了"
+      cancelledToast="读者暂时看不到这本书的开页动画"
+      warnings={[
+        missing > 0 && `还有 ${missing} 个有动作描述的单元没有生成动画，这些页面保持静止。`,
+        outdated > 0 && `${outdated} 个单元的动作描述改过但还没重新生成，读者看到的是旧版动画。`,
+      ]}
+    />
+  );
+}
+
+interface ReadyControlProps {
+  /** "Voice Ready" 或 "Dance Ready!" */
+  name: string;
+  isReady: boolean;
+  mutation: UseMutationResult<BookAi, Error, boolean>;
+  /** 还不能确认的原因（如还没有生成任何内容） */
+  emptyHint: string | null;
+  confirmText: string;
+  cancelText: string;
+  confirmedToast: string;
+  cancelledToast: string;
+  /** 确认前提醒还没生成、需要重新生成的单元 */
+  warnings: (string | false)[];
+}
+
+function ReadyControl({
+  name,
+  isReady,
+  mutation,
+  emptyHint,
+  confirmText,
+  cancelText,
+  confirmedToast,
+  cancelledToast,
+  warnings,
+}: ReadyControlProps) {
+  const [open, setOpen] = useState(false);
+  const shownWarnings = warnings.filter(Boolean);
+
   const handleConfirm = () => {
     setOpen(false);
-    setVoiceReady.mutate(!isReady, {
+    mutation.mutate(!isReady, {
       onSuccess: () =>
         toast.add({
-          title: isReady ? "已取消 Voice Ready" : "已确认 Voice Ready",
-          description: isReady ? "读者暂时听不到这本书的朗读" : "读者现在可以听这本书的朗读了",
+          title: isReady ? `已取消 ${name}` : `已确认 ${name}`,
+          description: isReady ? cancelledToast : confirmedToast,
           type: "success",
         }),
       onError: (err) =>
@@ -353,40 +436,35 @@ function VoiceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi 
             <Button
               variant="outline"
               className="border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
-              disabled={setVoiceReady.isPending}
+              disabled={mutation.isPending}
             >
               <BadgeCheck className="size-4" />
-              Voice Ready
+              {name}
             </Button>
           ) : (
             <Button
               variant="outline"
-              disabled={setVoiceReady.isPending || withAudio === 0}
-              title={withAudio === 0 ? "还没有生成任何朗读" : undefined}
+              disabled={mutation.isPending || emptyHint !== null}
+              title={emptyHint ?? undefined}
             >
               <BadgeCheck className="size-4" />
-              确认 Voice Ready
+              确认 {name}
             </Button>
           )
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{isReady ? "取消 Voice Ready？" : "确认 Voice Ready？"}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {isReady
-              ? "取消后读者听不到这本书的朗读，书架上的音乐符号也会去掉；已生成的朗读会保留，可以随时再确认。"
-              : `确认后，读者在书架上会看到音乐符号，阅读时有朗读的页面会出现小喇叭。已生成朗读的单元：${withAudio} 个。`}
-          </AlertDialogDescription>
+          <AlertDialogTitle>{isReady ? `取消 ${name}？` : `确认 ${name}？`}</AlertDialogTitle>
+          <AlertDialogDescription>{isReady ? cancelText : confirmText}</AlertDialogDescription>
         </AlertDialogHeader>
-        {!isReady && (missing > 0 || outdated > 0) && (
+        {!isReady && shownWarnings.length > 0 && (
           <Alert className="text-xs">
             <CircleAlert />
             <AlertDescription className="text-xs">
-              {missing > 0 && <p>还有 {missing} 个有台词的单元没有生成朗读，这些页面不会出现小喇叭。</p>}
-              {outdated > 0 && (
-                <p>{outdated} 个单元的台词或音色改过但还没重新生成，读者听到的是旧版朗读。</p>
-              )}
+              {shownWarnings.map((warning) => (
+                <p key={warning as string}>{warning}</p>
+              ))}
             </AlertDescription>
           </Alert>
         )}
@@ -396,11 +474,131 @@ function VoiceReadyControl({ bookId, bookAi }: { bookId: string; bookAi: BookAi 
             onClick={handleConfirm}
             variant={isReady ? "destructive" : "default"}
           >
-            {isReady ? "取消 Voice Ready" : "确认"}
+            {isReady ? `取消 ${name}` : "确认"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+// ============================================================================
+// 动画：进度 + 全部生成 + Dance Ready!
+// ============================================================================
+
+/** 能做开页动画的单元：有动作描述，且不是由封面动画负责的封面页 */
+function animatableUnits(bookAi: BookAi) {
+  return bookAi.spreads
+    .flatMap((s) => s.units)
+    .filter((u) => !u.video_by_cover && (u.motion_prompt ?? "").trim());
+}
+
+function isVideoBusy(unit: AiUnit) {
+  return unit.video_status === "queued" || unit.video_status === "running";
+}
+
+function VideoPipelineRow({ bookId, bookAi }: { bookId: string; bookAi: BookAi }) {
+  const generateAll = useGenerateAll(bookId, "video");
+
+  const animatable = animatableUnits(bookAi);
+  const units = animatable.filter((u) => u.video_enabled);
+  const ready = units.filter((u) => u.video_url).length;
+  const outdated = units.filter((u) => u.video_url && u.video_outdated).length;
+  const running = units.filter(isVideoBusy).length;
+  const failed = units.filter((u) => u.video_status === "failed").length;
+  const disabled = animatable.length - units.length;
+  // 与后端"全部生成"一致：未生成、失败或动作描述已改的
+  const todo = units.filter(
+    (u) => !isVideoBusy(u) && !(u.video_status === "ready" && !u.video_outdated),
+  ).length;
+  const options = bookAi.video_options;
+
+  const summary = [
+    `已生成 ${ready} / ${units.length} 个单元`,
+    running && `${running} 个生成中`,
+    outdated && `${outdated} 个需要重新生成`,
+    failed && `${failed} 个失败`,
+    disabled && `${disabled} 个已关闭动画`,
+  ].filter(Boolean);
+
+  // 不做费用预估，也不二次确认（D65）
+  const handleGenerateAll = () => {
+    generateAll.mutate(undefined, {
+      onSuccess: ({ queued }) =>
+        toast.add(
+          queued
+            ? {
+                title: `已加入 ${queued} 个单元`,
+                description: "服务商最多同时生成 3 段，每段约 1–3 分钟…",
+                type: "success",
+              }
+            : { title: "所有动画都已是最新", type: "success" },
+        ),
+      onError: (err) =>
+        toast.add({ title: "全部生成动画失败", description: getErrorMessage(err), type: "error" }),
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+          <Film className="size-4 text-muted-foreground" />
+        </div>
+        <Progress
+          value={units.length ? (ready / units.length) * 100 : 0}
+          aria-label="动画生成进度"
+          className="min-w-0 flex-1 gap-1.5"
+        >
+          <div className="flex w-full flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium">动画</span>
+            <span className="text-xs text-muted-foreground">{summary.join(" · ")}</span>
+          </div>
+        </Progress>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={handleGenerateAll}
+          disabled={generateAll.isPending || running > 0 || todo === 0}
+          title={
+            todo === 0 && running === 0
+              ? "所有动画都已是最新"
+              : `为 ${todo} 个未生成、失败或动作描述已修改的单元生成动画（每个 ${options?.default_duration ?? 5} 秒 · ${options?.default_resolution ?? "480P"}）；关闭了动画的开页跳过`
+          }
+        >
+          {running > 0 || generateAll.isPending ? (
+            <Spinner className="size-4" />
+          ) : (
+            <Film className="size-4" />
+          )}
+          {running > 0 ? "生成中…" : "全部生成"}
+        </Button>
+        <DanceReadyControl bookId={bookId} bookAi={bookAi} />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="动画设置" title="动画设置" />
+            }
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                默认 {options?.default_duration ?? 5} 秒 · {options?.default_resolution ?? "480P"}
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link to="/admin/ai" />}>
+              <Settings2 />
+              在 AI 配置中修改
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   );
 }
 
@@ -436,12 +634,12 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
     );
   };
 
-  const handleGenerate = () => {
-    generate.mutate(undefined, {
+  const handleGenerate = (choice?: VideoChoice) => {
+    generate.mutate(choice ?? {}, {
       onSuccess: () =>
         toast.add({
           title: "封面动画已提交",
-          description: "服务商生成一段 5 秒的视频，约需 1–3 分钟…",
+          description: "服务商生成一段视频，约需 1–3 分钟…",
           type: "success",
         }),
       onError: (err) =>
@@ -470,19 +668,32 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
           封面动画
         </CardTitle>
         <CardDescription>
-          像魔法报纸上会动的照片：封面里的角色轻轻眨眼、呼吸，画面其余部分不变，循环播放。
+          像《预言家日报》上会动的魔法照片：封面里的角色明显地动起来，背景也轻轻地动，循环播放。
         </CardDescription>
-        <CardAction>
+        <CardAction className="flex items-center gap-1">
           <Button
             size="sm"
             variant={hasVideo ? "outline" : "default"}
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={isBusy || isDirty || book.processing_status !== "ready"}
-            title={isDirty ? "请先保存动作描述" : undefined}
+            title={
+              isDirty
+                ? "请先保存动作描述"
+                : bookAi.video_options
+                  ? `按 AI 配置里的默认设置生成（${bookAi.video_options.default_duration} 秒 · ${bookAi.video_options.default_resolution}）`
+                  : undefined
+            }
           >
             {isBusy ? <Spinner className="size-4" /> : <Wand2 className="size-4" />}
             {isBusy ? "生成中…" : hasVideo ? "重新生成" : "生成封面动画"}
           </Button>
+          {bookAi.video_options && (
+            <VideoOptionsPopover
+              options={bookAi.video_options}
+              disabled={isBusy || isDirty || book.processing_status !== "ready"}
+              onGenerate={handleGenerate}
+            />
+          )}
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 sm:flex-row">
@@ -506,7 +717,18 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
                   循环播放中
                 </Badge>
               </div>
-              <CoverVideoDialog url={cover.video_url!} poster={book.cover_url} />
+              <VideoPreviewDialog
+                url={cover.video_url!}
+                poster={book.cover_url}
+                title="封面动画预览"
+                description="正放一遍再倒放回来，循环播放；首尾都是封面原图，所以接缝处看不出跳变。"
+                trigger={
+                  <Button size="xs" variant="outline" className="w-full">
+                    <Maximize2 className="size-3" />
+                    放大预览
+                  </Button>
+                }
+              />
             </>
           ) : book.cover_url ? (
             <img
@@ -531,7 +753,7 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
             <Textarea
               value={motion}
               onChange={(e) => setMotion(e.target.value)}
-              placeholder="留空则由 AI 看封面自动写。例如：兔子波西眨眨眼、手指轻挠下巴，小老鼠皮普的尾巴轻轻摆动"
+              placeholder="留空则由 AI 看封面自动写。例如：兔子波西眨眨眼、挥挥手，小老鼠皮普的尾巴左右摆动，背景的树叶轻轻晃动"
               className="min-h-[60px] resize-y text-xs"
             />
           </div>
@@ -539,7 +761,10 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
           <div className="flex flex-wrap items-center gap-2">
             <CoverStatusBadge status={cover.status} />
             {hasVideo && cover.resolution && (
-              <span className="text-xs text-muted-foreground">5 秒 · {cover.resolution}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {cover.duration_s ? `${cover.duration_s} 秒 · ` : ""}
+                {cover.resolution}
+              </span>
             )}
             {hasVideo && cover.frame_changed && (
               <Badge
@@ -588,22 +813,27 @@ function CoverAnimationCard({ book, bookAi }: { book: AdminBookDetail; bookAi: B
   );
 }
 
-/** 放大预览封面动画（带播放控制），小图里不容易看清动作 */
-function CoverVideoDialog({ url, poster }: { url: string; poster: string | null }) {
+/** 放大预览动画（带播放控制），小图里不容易看清动作 */
+function VideoPreviewDialog({
+  url,
+  poster,
+  title,
+  description,
+  trigger,
+}: {
+  url: string;
+  poster: string | null;
+  title: string;
+  description: string;
+  trigger: React.ReactElement;
+}) {
   return (
     <Dialog>
-      <DialogTrigger
-        render={
-          <Button size="xs" variant="outline" className="w-full">
-            <Maximize2 className="size-3" />
-            放大预览
-          </Button>
-        }
-      />
-      <DialogContent className="sm:max-w-2xl">
+      <DialogTrigger render={trigger} />
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>封面动画预览</DialogTitle>
-          <DialogDescription>5 秒一段循环播放；首尾帧就是封面原图，所以接缝处看不出跳变。</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <video
           src={url}
@@ -1209,6 +1439,7 @@ interface SpreadCardProps {
   book: AdminBookDetail;
   spread: Spread;
   characters: Character[];
+  videoOptions: AiVideoOptions | null;
   onSetCover: (index: number) => void;
   isSettingCover: boolean;
 }
@@ -1218,12 +1449,14 @@ function SpreadCard({
   book,
   spread,
   characters,
+  videoOptions,
   onSetCover,
   isSettingCover,
 }: SpreadCardProps) {
   const updateSpreadMode = useUpdateSpreadMode(bookId);
   const updateSwitches = useUpdateSpreadSwitches(bookId);
   const generateSpreadAudio = useGenerateSpreadAudio(bookId);
+  const generateSpreadVideo = useGenerateSpreadVideo(bookId);
   const hasTwoPages = spread.left_page_index !== null && spread.right_page_index !== null;
   // 开页的第一页：接口用它指代开页
   const firstPage = (spread.left_page_index ?? spread.right_page_index)!;
@@ -1254,6 +1487,24 @@ function SpreadCard({
           toast.add({ title: "设置失败", description: getErrorMessage(err), type: "error" }),
       },
     );
+  };
+
+  const animatable = spread.units.filter(
+    (u) => !u.video_by_cover && (u.motion_prompt ?? "").trim(),
+  );
+  const isSpreadVideoBusy = generateSpreadVideo.isPending || spread.units.some(isVideoBusy);
+
+  const handleGenerateSpreadVideo = () => {
+    generateSpreadVideo.mutate(firstPage, {
+      onSuccess: () =>
+        toast.add({
+          title: "本开页动画已提交",
+          description: "服务商生成一段 5 秒的视频，约需 1–3 分钟…",
+          type: "success",
+        }),
+      onError: (err) =>
+        toast.add({ title: "生成本开页动画失败", description: getErrorMessage(err), type: "error" }),
+    });
   };
 
   const handleGenerateSpreadAudio = () => {
@@ -1323,7 +1574,7 @@ function SpreadCard({
               </label>
               <label
                 className="flex cursor-pointer items-center gap-1.5"
-                title="关闭后不生成动画（动画功能开发中）"
+                title="关闭后一键生成时跳过，阅读时也不播放动画"
               >
                 <Switch
                   size="sm"
@@ -1354,6 +1605,20 @@ function SpreadCard({
             >
               {isSpreadAudioBusy ? <Spinner className="size-3" /> : <Volume2 className="size-3" />}
               {spread.units.some((u) => u.audio_url) ? "重新生成本开页朗读" : "生成本开页朗读"}
+            </Button>
+          )}
+          {/* 只有一个单元时，单元卡片里的"生成动画"就够了 */}
+          {spread.video_enabled && animatable.length > 1 && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-7 bg-background"
+              onClick={handleGenerateSpreadVideo}
+              disabled={isSpreadVideoBusy}
+              title="为这个开页的所有单元生成动画（使用已保存的动作描述）"
+            >
+              {isSpreadVideoBusy ? <Spinner className="size-3" /> : <Film className="size-3" />}
+              {spread.units.some((u) => u.video_url) ? "重新生成本开页动画" : "生成本开页动画"}
             </Button>
           )}
 
@@ -1435,6 +1700,14 @@ function SpreadCard({
                 unit={unit}
                 characters={characters}
                 spread={spread}
+                videoOptions={videoOptions}
+                pageUrls={book.pages
+                  .filter(
+                    (p) =>
+                      p.index >= unit.first_page_index &&
+                      p.index < unit.first_page_index + unit.page_count,
+                  )
+                  .map((p) => p.url)}
               />
             ))
           )}
@@ -1453,9 +1726,19 @@ interface UnitDraftEditorProps {
   unit: AiUnit;
   characters: Character[];
   spread: Spread;
+  videoOptions: AiVideoOptions | null;
+  /** 单元覆盖的页面图（合并单元为左右两页） */
+  pageUrls: string[];
 }
 
-function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorProps) {
+function UnitDraftEditor({
+  bookId,
+  unit,
+  characters,
+  spread,
+  videoOptions,
+  pageUrls,
+}: UnitDraftEditorProps) {
   const updateUnit = useUpdateAiUnit(bookId);
   const draftUnit = useDraftAiUnit(bookId);
 
@@ -1528,12 +1811,7 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
     <div className="rounded-lg border bg-muted/20 p-4">
       {/* 单元头部 */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-xs text-foreground/90">{unitLabel}</span>
-          <div className="flex items-center gap-1.5">
-            <VideoStatusBadge status={unit.video_status} />
-          </div>
-        </div>
+        <span className="font-medium text-xs text-foreground/90">{unitLabel}</span>
 
         <div className="flex items-center gap-2">
           <Button
@@ -1637,15 +1915,24 @@ function UnitDraftEditor({ bookId, unit, characters, spread }: UnitDraftEditorPr
         <div>
           <span className="mb-1.5 flex items-center gap-1.5 font-medium text-xs">
             <Film className="size-3.5 text-muted-foreground" />
-            动作描述（循环动画提示词）
+            动作描述（画面里谁、做什么小动作）
           </span>
           <Textarea
             value={motionPrompt}
             onChange={(e) => setMotionPrompt(e.target.value)}
-            placeholder="例如：大怪兽慢慢眨眼，尾巴轻轻摆动，动作轻柔缓慢，最后回到初始姿态…"
+            placeholder="只写看得见的角色和来回往复的动作，例如：大怪兽眨眨眼、尾巴左右摆动，树叶轻轻晃动。没有角色或物品可动的页面留空，不生成动画"
             className="min-h-[60px] resize-y text-xs"
           />
         </div>
+
+        {/* 动画 */}
+        <UnitVideoRow
+          bookId={bookId}
+          unit={unit}
+          options={videoOptions}
+          pageUrls={pageUrls}
+          isDirty={isDirty}
+        />
       </div>
     </div>
   );
@@ -1785,22 +2072,176 @@ function AudioStatusBadge({ status, outdated }: { status: AiUnit["audio_status"]
   );
 }
 
-function VideoStatusBadge({ status }: { status: string }) {
-  if (status === "ready") {
+function UnitVideoRow({
+  bookId,
+  unit,
+  options,
+  pageUrls,
+  isDirty,
+}: {
+  bookId: string;
+  unit: AiUnit;
+  options: AiVideoOptions | null;
+  pageUrls: string[];
+  isDirty: boolean;
+}) {
+  const generateVideo = useGenerateUnitVideo(bookId);
+  const isBusy = isVideoBusy(unit) || generateVideo.isPending;
+  const hasMotion = (unit.motion_prompt ?? "").trim() !== "";
+
+  if (unit.video_by_cover) {
     return (
-      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-[10px] text-blue-700">
-        动画已就绪
-      </Badge>
+      <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+        <Film className="size-3.5" />
+        第 1 页是封面，动画由上方「封面动画」负责
+      </div>
     );
   }
-  if (status === "running" || status === "queued") {
+  if (!unit.video_enabled) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+        <Film className="size-3.5" />
+        这个开页已关闭动画：一键生成时跳过，阅读时也不播放
+      </div>
+    );
+  }
+  if (!hasMotion && !unit.video_url) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        没有动作描述，这个单元不生成动画（画面静止）。
+      </p>
+    );
+  }
+
+  let blockedReason: string | null = null;
+  if (!hasMotion) blockedReason = "请先填写动作描述";
+  else if (isDirty) blockedReason = "请先保存草稿";
+
+  const handleGenerate = (choice?: VideoChoice) => {
+    generateVideo.mutate(
+      { unitId: unit.id, ...choice },
+      {
+        onSuccess: () =>
+          toast.add({
+            title: "动画已提交",
+            description: "服务商生成一段循环视频，约需 1–3 分钟…",
+            type: "success",
+          }),
+        onError: (err) =>
+          toast.add({ title: "提交动画任务失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+  };
+
+  const merged = unit.page_count === 2;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Film className="size-3.5 text-muted-foreground" />
+            动画
+          </span>
+          <VideoStatusBadge status={unit.video_status} outdated={unit.video_outdated} />
+          {unit.video_url && unit.video_duration_s !== null && (
+            <span className="text-muted-foreground tabular-nums">
+              {unit.video_duration_s} 秒 · {unit.video_resolution}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {unit.video_url && (
+            <VideoPreviewDialog
+              url={unit.video_url}
+              poster={merged ? null : (pageUrls[0] ?? null)}
+              title="开页动画预览"
+              description={
+                merged
+                  ? "左右两页拼成一张整图生成；阅读时左页播放左半边、右页播放右半边。"
+                  : "正放一遍再倒放回来，首尾都是原画，循环播放时接缝处看不出跳变。"
+              }
+              trigger={
+                <Button size="xs" variant="ghost">
+                  <Play className="size-3" />
+                  预览
+                </Button>
+              }
+            />
+          )}
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => handleGenerate()}
+            disabled={isBusy || blockedReason !== null}
+            title={
+              blockedReason ??
+              (options
+                ? `按 AI 配置里的默认设置生成（${options.default_duration} 秒 · ${options.default_resolution}）`
+                : undefined)
+            }
+          >
+            {isBusy ? <Spinner className="size-3" /> : <Film className="size-3" />}
+            {unit.video_url ? "重新生成动画" : "生成动画"}
+          </Button>
+          {options && (
+            <VideoOptionsPopover
+              options={options}
+              disabled={isBusy || blockedReason !== null}
+              onGenerate={handleGenerate}
+            />
+          )}
+        </div>
+      </div>
+      {blockedReason && !isBusy && <p className="text-xs text-muted-foreground">{blockedReason}</p>}
+      {unit.video_status === "failed" && unit.video_error && (
+        <Alert variant="destructive" className="px-2 py-1.5 text-xs">
+          <CircleAlert />
+          <AlertDescription className="text-xs">{unit.video_error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+function VideoStatusBadge({ status, outdated }: { status: AiUnit["video_status"]; outdated: boolean }) {
+  if (status === "queued" || status === "running") {
     return (
       <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
-        动画生成中
+        {status === "queued" ? "排队中" : "生成中，约需 1–3 分钟"}
       </Badge>
     );
   }
-  return null;
+  if (status === "failed") {
+    return (
+      <Badge variant="destructive" className="text-[10px]">
+        生成失败
+      </Badge>
+    );
+  }
+  if (status === "ready" && outdated) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+        title="动作描述或视频模型在生成动画之后改过"
+      >
+        需要重新生成
+      </Badge>
+    );
+  }
+  if (status === "ready") {
+    return (
+      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700">
+        已就绪
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+      未生成
+    </Badge>
+  );
 }
 
 function PageThumb({

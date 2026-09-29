@@ -1,4 +1,4 @@
-"""Worker：轮询 jobs 表，逐个执行后台任务（PDF 拆页、AI 分析 / 草稿 / 音色 / 朗读 / 视频）。
+"""Worker：轮询 jobs 表，逐个执行后台任务（PDF 拆页、AI 分析 / 草稿 / 音色 / 朗读 / 动画）。
 
 视频一段要几分钟，拆成"提交"和"查询"两步（docs/06 第 6.7 节）：提交后任务进入 waiting，
 Worker 继续处理别的任务，到 next_poll_at 再查询；服务商那边同时最多 MAX_REMOTE_VIDEOS 个。
@@ -6,6 +6,7 @@ Worker 继续处理别的任务，到 next_poll_at 再查询；服务商那边�
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.ai import audio, providers, speech, video, voices
 from app.ai.providers import ProviderError
 from app.ai.settings import (
+    CapabilityConfig,
     load_active_config,
     load_config,
     load_credentials,
@@ -35,13 +37,18 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 1.0
 DB_NOT_READY_RETRY_SECONDS = 2.0
 
-VIDEO_JOB_TYPES = ("ai_cover_video",)
+VIDEO_JOB_TYPES = ("ai_cover_video", "ai_video_unit")
 # 同时在服务商那边排队 / 生成的视频任务上限
 MAX_REMOTE_VIDEOS = 3
 # 视频任务每隔多久查询一次；查询出错（如网络抖动）也按这个间隔重试
 VIDEO_POLL_INTERVAL = timedelta(seconds=15)
 # 提交后这么久还没生成好就算失败
 VIDEO_MAX_WAIT = timedelta(minutes=30)
+
+
+def _motion(data: dict) -> str | None:
+    """大模型写的动作描述；没有可动内容的页面给空字符串，存为 None（不生成动画）。"""
+    return str(data.get("motion_prompt") or "").strip() or None
 
 
 class Worker:
@@ -145,6 +152,8 @@ class Worker:
             self.synthesize_unit(job_id, unit_id)
         elif job_type == "ai_cover_video" and book_id is not None:
             self.cover_video(job_id, book_id)
+        elif job_type == "ai_video_unit" and unit_id is not None:
+            self.unit_video(job_id, unit_id)
         elif job_type is not None:
             self._finish(job_id, error=f"未知的任务类型：{job_type}")
         return True
@@ -398,7 +407,7 @@ class Worker:
                         first_page_index=p_idx,
                         page_count=1,
                         lines=lines,
-                        motion_prompt=p_data.get("motion_prompt"),
+                        motion_prompt=_motion(p_data),
                     )
                     db.add(unit)
                 else:
@@ -423,8 +432,8 @@ class Worker:
                         for line in p_right_data.get("lines", [])
                         if isinstance(line, dict)
                     ]
-                    prompt_l = p_left_data.get("motion_prompt")
-                    prompt_r = p_right_data.get("motion_prompt")
+                    prompt_l = _motion(p_left_data)
+                    prompt_r = _motion(p_right_data)
 
                     if is_same:
                         lines = (
@@ -460,7 +469,7 @@ class Worker:
             book.voice_ready_at = None
             book.dance_ready_at = None
             # 封面动画的动作描述草稿（D96）：管理员填过的不覆盖
-            cover_motion = raw_pages.get(book.cover_page_index, {}).get("motion_prompt")
+            cover_motion = _motion(raw_pages.get(book.cover_page_index, {}))
             if not book.cover_motion_prompt and cover_motion:
                 book.cover_motion_prompt = cover_motion
             db.commit()
@@ -549,7 +558,7 @@ class Worker:
                 for line in result.get("lines", [])
                 if isinstance(line, dict)
             ]
-            unit.motion_prompt = result.get("motion_prompt")
+            unit.motion_prompt = _motion(result)
             db.commit()
 
         self._finish(job_id)
@@ -709,13 +718,118 @@ class Worker:
                 db.commit()
         self._finish(job_id, error=message)
 
+    # ---------- 动画视频：提交后定时查询（D96） ----------
+
+    def _is_submitted(self, job_id: int) -> bool:
+        with self.session_factory() as db:
+            job = db.get(Job, job_id)
+            return job is not None and job.remote_task_id is not None
+
+    def _submit_remote_video(
+        self,
+        job_id: int,
+        config: CapabilityConfig,
+        credentials: dict[str, str],
+        *,
+        frames: list[Path],
+        prompt: str,
+        payload: dict,
+        fail: Callable[[str], None],
+    ) -> bool:
+        """提交视频任务，任务转为等待查询；提交时的参数存进 jobs.payload，查询和完成时使用。"""
+        try:
+            task_id = providers.submit_video(
+                config,
+                credentials,
+                frame_jpeg=video.frame_jpeg(frames),
+                prompt=prompt,
+                negative_prompt=video.NEGATIVE_PROMPT,
+                duration=payload["duration"],
+                resolution=payload["resolution"],
+            )
+        except ProviderError as e:
+            logger.warning("视频提交失败 job=%s: %s", job_id, e)
+            fail(str(e))
+            return False
+        except Exception as e:
+            logger.exception("视频提交出现异常 job=%s", job_id)
+            fail(f"提交失败：{e}")
+            return False
+
+        with self.session_factory() as db:
+            db.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(
+                    status="waiting",
+                    remote_task_id=task_id,
+                    payload=payload,
+                    next_poll_at=utcnow() + VIDEO_POLL_INTERVAL,
+                )
+            )
+            db.commit()
+        logger.info("视频已提交 job=%s task=%s", job_id, task_id)
+        return True
+
+    def _poll_remote_video(
+        self, job_id: int, path: Path, fail: Callable[[str], None]
+    ) -> dict | None:
+        """查询一次。生成好了就下载、处理后保存到 path，返回提交时的 payload；
+        还在生成（稍后再查）或失败（已调用 fail）时返回 None。下载的视频做成来回播放的循环。"""
+        with self.session_factory() as db:
+            job = db.get(Job, job_id)
+            if job is None:
+                return None  # 绘本或单元已删除，任务随之删除
+            payload = dict(job.payload or {})
+            task_id = job.remote_task_id
+            started_at = job.started_at or utcnow()
+            # 用提交时的服务商查询（中途在 AI 配置里换了服务商也不影响）
+            config = load_config(db, "video", payload.get("provider", "dashscope"))
+            credentials = load_credentials(self.settings, config.provider)
+        assert task_id is not None
+
+        timed_out = utcnow() - started_at > VIDEO_MAX_WAIT
+        try:
+            result = providers.poll_video(config, credentials, task_id)
+        except ProviderError as e:
+            if timed_out:
+                fail(f"生成超时：{e}")
+            else:
+                logger.warning("查询视频出错，稍后重试 job=%s: %s", job_id, e)
+                self._wait_again(job_id)
+            return None
+
+        if result.status == "running":
+            if timed_out:
+                fail("生成超时，请重试")
+            else:
+                self._wait_again(job_id)
+            return None
+        if result.status == "failed":
+            fail(result.error or "生成失败")
+            return None
+
+        try:
+            assert result.video_url is not None
+            video.save_loop_video(providers.download(result.video_url), path)
+        except (ProviderError, video.VideoProcessError) as e:
+            fail(str(e))
+            return None
+        return payload
+
+    def _wait_again(self, job_id: int) -> None:
+        with self.session_factory() as db:
+            db.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(status="waiting", next_poll_at=utcnow() + VIDEO_POLL_INTERVAL)
+            )
+            db.commit()
+
     # ---------- 封面动画（D96） ----------
 
     def cover_video(self, job_id: int, book_id: str) -> None:
-        with self.session_factory() as db:
-            job = db.get(Job, job_id)
-            submitted = job is not None and job.remote_task_id is not None
-        if submitted:
+        if self._is_submitted(job_id):
             self._poll_cover_video(job_id, book_id)
         else:
             self._submit_cover_video(job_id, book_id)
@@ -733,6 +847,8 @@ class Worker:
             if missing:
                 self._fail_cover(job_id, book_id, f"请先在 .env 中设置 {'、'.join(missing)}")
                 return
+            job = db.get(Job, job_id)
+            requested = (job.payload if job else None) or {}
             frame_path = storage.page_path(self.settings, book_id, book.cover_page_index)
             motion = (book.cover_motion_prompt or "").strip()
             story = book.story
@@ -760,89 +876,36 @@ class Worker:
             book = db.get(Book, book_id)
             if book is None:
                 return
-            resolution = str(config.options.get("resolution") or "720P")
+            # 管理员临时指定的时长、清晰度（D79），没指定就用 AI 配置里的默认值
+            duration = int(requested.get("duration") or config.options.get("duration") or 5)
+            resolution = str(
+                requested.get("resolution") or config.options.get("resolution") or "480P"
+            )
             payload = {
                 "provider": config.provider,
+                "duration": duration,
                 "resolution": resolution,
-                "source_hash": video.cover_source_hash(motion, config, resolution),
+                "source_hash": video.cover_source_hash(motion, config, duration, resolution),
                 "frame": video.cover_frame_key(book.cover_page_index, book.assets_version),
             }
-        prompt = video.cover_prompt(motion)
-
-        try:
-            task_id = providers.submit_video(
-                config,
-                credentials,
-                frame_jpeg=video.frame_jpeg(frame_path),
-                prompt=prompt,
-                negative_prompt=video.NEGATIVE_PROMPT,
-                resolution=resolution,
-            )
-        except ProviderError as e:
-            logger.warning("封面动画提交失败 book=%s: %s", book_id, e)
-            self._fail_cover(job_id, book_id, str(e))
-            return
-        except Exception as e:
-            logger.exception("封面动画提交出现异常 book=%s", book_id)
-            self._fail_cover(job_id, book_id, f"提交失败：{e}")
-            return
-
-        with self.session_factory() as db:
-            db.execute(
-                update(Job)
-                .where(Job.id == job_id)
-                .values(
-                    status="waiting",
-                    remote_task_id=task_id,
-                    payload=payload,
-                    next_poll_at=utcnow() + VIDEO_POLL_INTERVAL,
-                )
-            )
-            db.commit()
-        logger.info("封面动画已提交 book=%s task=%s", book_id, task_id)
+        self._submit_remote_video(
+            job_id,
+            config,
+            credentials,
+            frames=[frame_path],
+            prompt=video.cover_prompt(motion),
+            payload=payload,
+            fail=lambda message: self._fail_cover(job_id, book_id, message),
+        )
 
     def _poll_cover_video(self, job_id: int, book_id: str) -> None:
-        with self.session_factory() as db:
-            job = db.get(Job, job_id)
-            if job is None or db.get(Book, book_id) is None:
-                return  # 绘本已删除，任务随之删除
-            payload = dict(job.payload or {})
-            task_id = job.remote_task_id
-            started_at = job.started_at or utcnow()
-            # 用提交时的服务商查询（中途在 AI 配置里换了服务商也不影响）
-            config = load_config(db, "video", payload.get("provider", "dashscope"))
-            credentials = load_credentials(self.settings, config.provider)
-
-        timed_out = utcnow() - started_at > VIDEO_MAX_WAIT
-        try:
-            result = providers.poll_video(config, credentials, task_id)
-        except ProviderError as e:
-            if timed_out:
-                self._fail_cover(job_id, book_id, f"生成超时：{e}")
-            else:
-                logger.warning("查询封面动画出错，稍后重试 book=%s: %s", book_id, e)
-                self._wait_again(job_id)
+        payload = self._poll_remote_video(
+            job_id,
+            storage.ai_cover_video_path(self.settings, book_id),
+            lambda message: self._fail_cover(job_id, book_id, message),
+        )
+        if payload is None:
             return
-
-        if result.status == "running":
-            if timed_out:
-                self._fail_cover(job_id, book_id, "生成超时，请重试")
-            else:
-                self._wait_again(job_id)
-            return
-        if result.status == "failed":
-            self._fail_cover(job_id, book_id, result.error or "生成失败")
-            return
-
-        try:
-            assert result.video_url is not None
-            data = providers.download(result.video_url)
-            path = storage.ai_cover_video_path(self.settings, book_id)
-            video.save_video(data, path)
-        except (ProviderError, video.VideoProcessError) as e:
-            self._fail_cover(job_id, book_id, str(e))
-            return
-
         with self.session_factory() as db:
             book = db.get(Book, book_id)
             if book is None:
@@ -853,18 +916,10 @@ class Worker:
             book.cover_video_source_hash = payload.get("source_hash")
             book.cover_video_frame = payload.get("frame")
             book.cover_video_resolution = payload.get("resolution")
+            book.cover_video_duration_s = payload.get("duration")
             db.commit()
         self._finish(job_id)
         logger.info("封面动画生成完成 book=%s", book_id)
-
-    def _wait_again(self, job_id: int) -> None:
-        with self.session_factory() as db:
-            db.execute(
-                update(Job)
-                .where(Job.id == job_id)
-                .values(status="waiting", next_poll_at=utcnow() + VIDEO_POLL_INTERVAL)
-            )
-            db.commit()
 
     def _fail_cover(self, job_id: int, book_id: str, message: str) -> None:
         with self.session_factory() as db:
@@ -882,3 +937,108 @@ class Worker:
         if not api_key:
             raise ProviderError("故事与台词识别的服务商没有设置 API Key")
         return describe_cover_motion(cover_path, story, names, config, api_key)
+
+    # ---------- 开页动画（A4） ----------
+
+    def unit_video(self, job_id: int, unit_id: str) -> None:
+        if self._is_submitted(job_id):
+            self._poll_unit_video(job_id, unit_id)
+        else:
+            self._submit_unit_video(job_id, unit_id)
+
+    def _submit_unit_video(self, job_id: int, unit_id: str) -> None:
+        """以单元的原画为首帧（合并单元左右拼成一张），见 docs/06 第 6.5 节。"""
+        logger.info("提交开页动画 unit=%s", unit_id)
+        with self.session_factory() as db:
+            job = db.get(Job, job_id)
+            unit = db.get(AiUnit, unit_id)
+            if job is None or unit is None:
+                self._finish(job_id, error="单元已被删除")
+                return
+            if not unit.video_enabled:
+                # 排队期间开页关闭了动画（D95）：不生成，保留原来的动画
+                unit.video_status = "ready" if unit.video_source_hash else "none"
+                db.commit()
+                self._finish(job_id)
+                return
+            motion = (unit.motion_prompt or "").strip()
+            if not motion:
+                self._fail_video(job_id, unit_id, "请先填写动作描述")
+                return
+            config = load_active_config(db, "video")
+            credentials = load_credentials(self.settings, config.provider)
+            missing = missing_credentials("video", config.provider, credentials)
+            if missing:
+                self._fail_video(job_id, unit_id, f"请先在 .env 中设置 {'、'.join(missing)}")
+                return
+            # 管理员临时指定的时长、清晰度（D79），没指定就用 AI 配置里的默认值
+            requested = job.payload or {}
+            duration = int(requested.get("duration") or config.options.get("duration") or 5)
+            resolution = str(
+                requested.get("resolution") or config.options.get("resolution") or "480P"
+            )
+            frames = [
+                storage.page_path(self.settings, unit.book_id, p)
+                for p in range(unit.first_page_index, unit.first_page_index + unit.page_count)
+            ]
+            payload = {
+                "provider": config.provider,
+                "duration": duration,
+                "resolution": resolution,
+                "source_hash": video.unit_source_hash(motion, config, duration, resolution),
+                # 查询期间开页改成了分别 / 合并，结果就对不上这个单元了
+                "page_count": unit.page_count,
+            }
+            unit.video_status = "running"
+            unit.video_error = None
+            db.commit()
+
+        self._submit_remote_video(
+            job_id,
+            config,
+            credentials,
+            frames=frames,
+            prompt=video.unit_prompt(motion),
+            payload=payload,
+            fail=lambda message: self._fail_video(job_id, unit_id, message),
+        )
+
+    def _poll_unit_video(self, job_id: int, unit_id: str) -> None:
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is None:
+                return
+            book_id = unit.book_id
+        # 先存到临时位置：确认单元没被改成分别 / 合并后再替换，生成期间旧动画仍可预览
+        final = storage.ai_video_path(self.settings, book_id, unit_id)
+        tmp = final.with_name(f"{unit_id}.new.mp4")
+        payload = self._poll_remote_video(
+            job_id, tmp, lambda message: self._fail_video(job_id, unit_id, message)
+        )
+        if payload is None:
+            return
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is None or unit.page_count != payload.get("page_count"):
+                tmp.unlink(missing_ok=True)
+                self._finish(job_id, error="开页已改为分别 / 合并生成，这次的结果作废")
+                return
+            tmp.replace(final)
+            unit.video_status = "ready"
+            unit.video_error = None
+            unit.video_version += 1
+            unit.video_source_hash = payload.get("source_hash")
+            unit.video_duration_s = payload.get("duration")
+            unit.video_resolution = payload.get("resolution")
+            db.commit()
+        self._finish(job_id)
+        logger.info("开页动画生成完成 unit=%s", unit_id)
+
+    def _fail_video(self, job_id: int, unit_id: str, message: str) -> None:
+        with self.session_factory() as db:
+            unit = db.get(AiUnit, unit_id)
+            if unit is not None:
+                unit.video_status = "failed"
+                unit.video_error = message
+                db.commit()
+        self._finish(job_id, error=message)

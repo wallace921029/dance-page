@@ -6,7 +6,8 @@ import { useToggleFavorite } from "@/api/shelf";
 import type { ShelfBook } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { isBookOpening, startBookOpening } from "@/pages/stage/book-opening";
-import { CoverVideo } from "@/pages/stage/cover-video";
+import { LoopVideo } from "@/pages/stage/loop-video";
+import { DanceReadySign } from "@/pages/stage/dance-ready-sign";
 import { DoodleHeart } from "@/pages/stage/doodle-heart";
 import { DoodleNote } from "@/pages/stage/doodle-note";
 import { coverRectInReader } from "@/pages/stage/reader-layout";
@@ -116,8 +117,8 @@ export function ShelfItem({
               )}
             />
             {book.cover_video_url && motionEnabled && (
-              // 与封面一起上浮、缩放；首尾帧就是封面原图
-              <CoverVideo
+              // 与封面一起上浮、缩放；视频首尾都是封面原图
+              <LoopVideo
                 src={book.cover_video_url}
                 className={cn(
                   "absolute inset-0 size-full rounded-md object-cover group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 group-active:scale-[.98]",
@@ -126,6 +127,13 @@ export function ShelfItem({
               />
             )}
           </Link>
+          {book.dance_ready && (
+            // 封面底部的剧场招牌，压在封面下沿上；字号随封面大小缩放
+            <DanceReadySign
+              className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-1/3"
+              style={{ fontSize: `clamp(9px, min(9cqw, 9cqh * ${book.cover_aspect}), 16px)` }}
+            />
+          )}
           <FavoriteButton book={book} motionEnabled={motionEnabled} />
         </div>
       </div>

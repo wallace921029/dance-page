@@ -40,9 +40,8 @@ def active_provider(db: Session, capability: CapabilityId) -> ProviderId:
 def load_config(db: Session, capability: CapabilityId, provider: ProviderId) -> CapabilityConfig:
     row = db.get(AiCapabilityConfig, (capability, provider))
     if row is not None:
-        return CapabilityConfig(
-            capability, provider, row.model, row.base_url, dict(row.options), saved=True
-        )
+        options = usable_options(capability, provider, row.model, dict(row.options))
+        return CapabilityConfig(capability, provider, row.model, row.base_url, options, saved=True)
     defaults = CAPABILITIES[capability].providers[provider]
     return CapabilityConfig(
         capability,
@@ -63,6 +62,21 @@ def default_options(capability: CapabilityId, provider: ProviderId, model: str) 
     if capability != "video" or video is None:
         return {}
     return {"duration": video.default_duration, "resolution": video.default_resolution}
+
+
+def usable_options(
+    capability: CapabilityId, provider: ProviderId, model: str, options: dict
+) -> dict:
+    """保存过的选项对该模型不合法（如可选范围后来修正过）时，换成该模型的默认值，
+    避免把服务商不接受的时长、清晰度发过去。"""
+    video = CAPABILITIES[capability].providers[provider].video_options(model)
+    if capability != "video" or video is None:
+        return {}
+    duration, resolution = options.get("duration"), options.get("resolution")
+    return {
+        "duration": duration if duration in video.durations else video.default_duration,
+        "resolution": resolution if resolution in video.resolutions else video.default_resolution,
+    }
 
 
 def normalize_options(

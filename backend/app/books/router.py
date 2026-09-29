@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.books import storage
-from app.books.schemas import ReaderBookOut, ShelfBookOut
+from app.books.schemas import ReaderBookOut, ShelfBookOut, reader_has_audio, reader_has_video
 from app.books.service import reader_cover_video_url
 from app.deps import AppSettings, CurrentUser, DbSession
 from app.models import AiUnit, Book, Favorite, Page, User
@@ -107,13 +107,7 @@ def get_unit_audio(
     """已确认 Voice Ready 的绘本的单元朗读（docs/06 第 7 节）。"""
     book = _readable_book(db, book_id, user)
     unit = db.get(AiUnit, unit_id)
-    if (
-        book.voice_ready_at is None
-        or unit is None
-        or unit.book_id != book.id
-        or unit.audio_source_hash is None
-        or not unit.audio_enabled
-    ):
+    if unit is None or unit.book_id != book.id or not reader_has_audio(book, unit):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "朗读不存在")
     path = storage.ai_audio_path(settings, book_id, unit_id)
     if not path.is_file():
@@ -130,6 +124,23 @@ def get_cover_video(book_id: str, user: CurrentUser, db: DbSession, settings: Ap
     path = storage.ai_cover_video_path(settings, book_id)
     if reader_cover_video_url(book) is None or not path.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "封面动画不存在")
+    return FileResponse(
+        path, media_type="video/mp4", headers={"Cache-Control": IMAGE_CACHE_CONTROL}
+    )
+
+
+@router.get("/{book_id}/ai/video/{unit_id}", response_class=FileResponse)
+def get_unit_video(
+    book_id: str, unit_id: str, user: CurrentUser, db: DbSession, settings: AppSettings
+):
+    """已确认 Dance Ready! 的绘本的开页动画（FileResponse 支持 iPad Safari 需要的分段请求）。"""
+    book = _readable_book(db, book_id, user)
+    unit = db.get(AiUnit, unit_id)
+    if unit is None or unit.book_id != book.id or not reader_has_video(book, unit):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "动画不存在")
+    path = storage.ai_video_path(settings, book_id, unit_id)
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "动画不存在")
     return FileResponse(
         path, media_type="video/mp4", headers={"Cache-Control": IMAGE_CACHE_CONTROL}
     )

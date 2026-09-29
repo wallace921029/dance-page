@@ -300,8 +300,6 @@ def test_generate_all(admin, worker, analyzed, fake):
     )
     assert admin.post(url).json() == {"queued": 1}
 
-    assert admin.post(f"/api/admin/books/{book_id}/ai/generate-all?type=video").status_code == 422
-
 
 def test_spread_mode_change_removes_audio(admin, settings, worker, analyzed, fake):
     book_id = analyzed["id"]

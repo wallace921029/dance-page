@@ -16,8 +16,21 @@
     --color-stage-light: #F5D98B;   /* 舞台光：标题、图标、页码 */
     --font-stage-title: "ZCOOL XiaoWei", "Noto Sans SC Variable", serif;
     --font-stage: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-stage-sign: "ZCOOL QingKe HuangYou", "ZCOOL XiaoWei", sans-serif; /* "Dance Ready!" 招牌 */
     --animate-firefly: firefly 7s ease-in-out infinite alternate; /* 书架上的萤火虫 */
     --animate-shelf-hop: shelf-hop 0.62s cubic-bezier(0.3, 0.7, 0.4, 1) both; /* 书依次跳上书架 */
+    --animate-marquee-glow: marquee-glow 3.2s ease-in-out infinite; /* 剧场招牌缓慢呼吸发光 */
+}
+
+@keyframes marquee-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 214, 107, 0.3), inset 0 0 4px rgba(255, 214, 107, 0.15);
+        text-shadow: 0 0 3px rgba(255, 214, 107, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 14px rgba(255, 214, 107, 0.7), inset 0 0 7px rgba(255, 214, 107, 0.35);
+        text-shadow: 0 0 9px rgba(255, 214, 107, 0.9);
+    }
 }
 
 @keyframes shelf-hop {

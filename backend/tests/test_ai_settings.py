@@ -87,7 +87,7 @@ def test_defaults(admin):
         "VOLCENGINE_SPEECH_API_KEY"
     ]
     video = config(settings, "video", "dashscope")
-    assert video["options"] == {"duration": 5, "resolution": "720P"}
+    assert video["options"] == {"duration": 5, "resolution": "480P"}
     assert video["video_models"]["wanx2.1-kf2v-plus"]["resolutions"] == ["720P"]
 
 
@@ -137,12 +137,12 @@ def test_switch_provider_keeps_each_config(admin):
         provider="volcengine",
         model="doubao-seedance-test",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
-        options={"duration": 8, "resolution": "1080p"},
+        options={"duration": 10, "resolution": "1080p"},
     )
     settings = res.json()
     assert capability(settings, "video")["provider"] == "volcengine"
     assert config(settings, "video", "volcengine")["options"] == {
-        "duration": 8,
+        "duration": 10,
         "resolution": "1080p",
     }
     # 切到火山后，百炼的设置仍在（末尾的 / 已去掉，未给的时长用默认值）
@@ -308,7 +308,7 @@ def test_dashscope_models_filtered_and_merged(admin, app, fake_provider):
     # 百炼的列表里没有首尾帧视频模型：只给内置推荐，并说明原因
     res = get_models(admin, "video", "dashscope")
     assert res["message"] == "服务商的列表里没有适合这项能力的模型，以下是推荐的模型"
-    assert [m["id"] for m in res["models"]] == ["wan2.2-kf2v-flash", "wanx2.1-kf2v-plus"]
+    assert [m["id"] for m in res["models"]] == ["wan2.2-i2v-flash", "wan2.6-i2v-flash"]
 
 
 def ark_model(model_id: str, created: int, *, domain: str, inputs, outputs, status=None) -> dict:
@@ -361,11 +361,11 @@ def test_volcengine_models(admin, app, fake_provider):
     assert [m["id"] for m in res["models"]] == ["doubao-seed-vision"]
 
     res = get_models(admin, "video", "volcengine")
-    # 已下线、纯文生视频的不出现；即将下线的排最后；标明支持首尾帧的排在前面
+    # 已下线、纯文生视频的不出现；即将下线的排最后；能以图片为首帧的都可以（D99）
     assert [(m["id"], m["note"], m["retiring"]) for m in res["models"]] == [
-        ("seedance-pro-flf", "支持首尾帧", False),
+        ("seedance-pro-flf", None, False),
         ("seedance-flf", None, False),
-        ("seedance-lite-i2v", "支持首尾帧 · 即将下线", True),
+        ("seedance-lite-i2v", "即将下线", True),
     ]
 
 

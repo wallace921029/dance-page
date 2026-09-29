@@ -1,5 +1,7 @@
 """火山引擎：方舟（故事与台词识别、视频）+ 豆包语音（朗读）。"""
 
+import base64
+
 import httpx
 
 from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult, VideoPoll
@@ -60,12 +62,12 @@ def list_models(
                 continue
             preferred, note = False, None
         else:
+            # 能以一张图片为首帧生成视频的（D99：不再需要首尾帧）
             if "video" not in outputs or not {"image", "first_frame", "first_last_frame"} & set(
                 inputs
             ):
                 continue
-            preferred = "first_last_frame" in inputs
-            note = "支持首尾帧" if preferred else None
+            preferred, note = False, None
         retiring = status == "Retiring"
         if retiring:
             note = "即将下线" if note is None else f"{note} · 即将下线"
@@ -106,10 +108,16 @@ def synthesize(
     raise ProviderError(_TTS_NOT_READY)
 
 
-_VIDEO_NOT_READY = (
-    "当前动画视频服务商是火山引擎，还不支持首尾帧动画（A0 实测账号开通的模型不支持首尾帧），"
-    "请在「AI 配置」中把动画视频切换到阿里云百炼 wan2.2-kf2v-flash"
-)
+# Seedance 视频任务的状态 → 统一的 running / succeeded / failed
+_VIDEO_TASK_STATUS = {
+    "queued": "running",
+    "running": "running",
+    "succeeded": "succeeded",
+    "failed": "failed",
+    "cancelled": "failed",
+    "expired": "failed",
+}
+VIDEO_TIMEOUT = 60.0
 
 
 def submit_video(
@@ -120,12 +128,62 @@ def submit_video(
     frame_jpeg: bytes,
     prompt: str,
     negative_prompt: str,
+    duration: int,
     resolution: str,
 ) -> str:
-    raise ProviderError(_VIDEO_NOT_READY)
+    """Seedance 图生视频：原页面图片作首帧（base64，不需要公开链接）。
+
+    Seedance 没有反向提示词，negative_prompt 不传。"""
+    if not config.model:
+        raise ProviderError("请先在「AI 配置」中选择火山的动画视频模型")
+    image = "data:image/jpeg;base64," + base64.b64encode(frame_jpeg).decode()
+    res = client.post(
+        f"{config.base_url.rstrip('/')}/contents/generations/tasks",
+        headers={"Authorization": f"Bearer {credentials['api_key']}"},
+        json={
+            "model": config.model,
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image}, "role": "first_frame"},
+            ],
+            # 画面比例跟随首帧
+            "ratio": "adaptive",
+            "resolution": resolution,
+            "duration": duration,
+            "watermark": False,
+        },
+        timeout=VIDEO_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        return res.json()["id"]
+    except (ValueError, KeyError, TypeError) as e:
+        raise ProviderError("服务商返回的任务结果无法识别") from e
 
 
 def poll_video(
     client: httpx.Client, config: CapabilityConfig, credentials: dict[str, str], task_id: str
 ) -> VideoPoll:
-    raise ProviderError(_VIDEO_NOT_READY)
+    res = client.get(
+        f"{config.base_url.rstrip('/')}/contents/generations/tasks/{task_id}",
+        headers={"Authorization": f"Bearer {credentials['api_key']}"},
+        timeout=VIDEO_TIMEOUT,
+    )
+    if res.status_code != 200:
+        raise ProviderError(describe_error(res))
+    try:
+        data = res.json()
+        status = _VIDEO_TASK_STATUS.get(data["status"], "running")
+    except (ValueError, KeyError, TypeError) as e:
+        raise ProviderError("服务商返回的任务状态无法识别") from e
+    if status == "succeeded":
+        url = (data.get("content") or {}).get("video_url")
+        if not url:
+            return VideoPoll("failed", error="服务商没有返回视频地址")
+        return VideoPoll("succeeded", video_url=url)
+    if status == "failed":
+        error = data.get("error") or {}
+        detail = error.get("message") or error.get("code") or data["status"]
+        return VideoPoll("failed", error=f"服务商返回：{detail}")
+    return VideoPoll("running")

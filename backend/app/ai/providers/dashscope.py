@@ -6,17 +6,18 @@ import re
 
 import httpx
 
+from app.ai.catalog import CAPABILITIES
 from app.ai.providers import DesignedVoice, ModelInfo, ProviderError, TestResult, VideoPoll
 from app.ai.providers.common import chat_ping, describe_error
 from app.ai.settings import CapabilityConfig
 
 # 百炼的模型列表只有模型名，按名字筛出适合各能力的模型。
-# 列表里目前没有支持音色设计的朗读模型和万相首尾帧模型，这两项主要靠内置推荐
+# 列表里目前没有支持音色设计的朗读模型和万相视频模型，这两项主要靠内置推荐
 _MODEL_PATTERNS = {
     # 旧的 -vl 系列和 QVQ；Qwen3.5 起的通用模型本身能看图，见 _is_native_multimodal
     "vision": re.compile(r"-vl-|-vl$|^qvq"),
     "tts": re.compile(r"tts-vd|cosyvoice"),
-    "video": re.compile(r"kf2v"),
+    "video": re.compile(r"i2v|kf2v"),
 }
 # 专做文字识别、实时语音、同传、向量的模型不适合分析整本故事
 _VISION_EXCLUDE = re.compile(r"ocr|realtime|livetranslate|embedding|rerank|tts|asr")
@@ -168,7 +169,7 @@ def synthesize(
     return download.content
 
 
-# 首尾帧视频（万相 kf2v）：异步任务，提交后按任务 ID 查询
+# 万相视频：异步任务，提交后按任务 ID 查询
 VIDEO_TIMEOUT = 60.0
 _VIDEO_TASK_STATUS = {
     "PENDING": "running",
@@ -235,16 +236,31 @@ def submit_video(
     frame_jpeg: bytes,
     prompt: str,
     negative_prompt: str,
+    duration: int,
     resolution: str,
 ) -> str:
-    if "kf2v" not in config.model:
+    """图生视频（i2v，只给首帧，D99）；首尾帧模型（kf2v）首帧和尾帧都用同一张图。"""
+    keyframes = "kf2v" in config.model
+    if not keyframes and "i2v" not in config.model:
         raise ProviderError(
-            f"动画需要首尾帧视频模型（如 wan2.2-kf2v-flash），当前是 {config.model}，"
+            f"动画需要万相图生视频模型（如 wan2.2-i2v-flash），当前是 {config.model}，"
             "请在「AI 配置」中更换动画视频模型"
         )
     frame_url = _upload_image(client, config, credentials, frame_jpeg)
+    if keyframes:
+        endpoint = "image2video/video-synthesis"
+        frames = {"first_frame_url": frame_url, "last_frame_url": frame_url}
+    else:
+        endpoint = "video-generation/video-synthesis"
+        frames = {"img_url": frame_url}
+    # 让服务商扩写提示词：动作更丰富（D99 试验时开着）
+    parameters: dict = {"resolution": resolution, "prompt_extend": True}
+    options = CAPABILITIES["video"].providers["dashscope"].video_options(config.model)
+    if options is None or len(options.durations) > 1:
+        # 时长固定的模型（如 wan2.2 固定 5 秒）不传
+        parameters["duration"] = duration
     res = client.post(
-        f"{config.base_url.rstrip('/')}/services/aigc/image2video/video-synthesis",
+        f"{config.base_url.rstrip('/')}/services/aigc/{endpoint}",
         headers={
             **_auth(credentials),
             "X-DashScope-Async": "enable",
@@ -253,14 +269,8 @@ def submit_video(
         },
         json={
             "model": config.model,
-            "input": {
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "first_frame_url": frame_url,
-                "last_frame_url": frame_url,
-            },
-            # 万相首尾帧模型的时长固定 5 秒，不传；提示词不让服务商改写
-            "parameters": {"resolution": resolution, "prompt_extend": False},
+            "input": {"prompt": prompt, "negative_prompt": negative_prompt, **frames},
+            "parameters": parameters,
         },
         timeout=VIDEO_TIMEOUT,
     )

@@ -92,7 +92,7 @@ class TestResultOut(BaseModel):
 
 class ModelOptionOut(BaseModel):
     id: str
-    # 如"推荐""支持首尾帧""即将下线"
+    # 如"推荐""即将下线"
     note: str | None
     retiring: bool
 

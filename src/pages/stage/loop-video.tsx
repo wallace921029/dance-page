@@ -1,9 +1,10 @@
-// 封面动画（D96）：像魔法报纸上会动的照片。叠在静态封面上，开始播放后才淡入，
-// 看不见（滚出屏幕、翻页中）时暂停并立即隐藏，露出下面的静态封面。视频首尾帧就是封面原图，切换不跳。
+// 叠在静态画面上的循环视频：封面动画（D96，像魔法报纸上会动的照片）和开页动画（A4，Dance Ready!）。
+// 开始播放后才淡入，看不见（滚出屏幕、翻页中）时暂停并立即隐藏，露出下面的静态画面。
+// 视频是正放再倒放的来回循环，首尾都是原画，切换不跳（D99）。系统开启"减少动态效果"时不显示。
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
-export function CoverVideo({
+export function LoopVideo({
   src,
   active = true,
   className,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ArrowLeft, BookOpen, Maximize, Minimize } from "lucide-react";
 import { useReaderBook } from "@/api/shelf";
@@ -13,11 +13,16 @@ import { getErrorMessage } from "@/lib/api";
 import { READER_BACKGROUND, StageRoundButton, stageSubmitButtonClass } from "@/pages/stage/common";
 import { finishBookOpening } from "@/pages/stage/book-opening";
 import { FlipBook, type FlipBookHandle } from "@/pages/stage/flip-book";
-import { CoverVideo } from "@/pages/stage/cover-video";
+import { LoopVideo } from "@/pages/stage/loop-video";
+import { PageVideos } from "@/pages/stage/page-videos";
 import { AutoReadToggle, ReadAloudSpeakers } from "@/pages/stage/read-aloud";
 import { useReadAloud } from "@/pages/stage/use-read-aloud";
 
 const NO_UNITS: ReaderUnit[] = [];
+
+// 朗读（Voice Ready）和动画（Dance Ready!）相互独立：一个单元可能只有其中一种（D67）
+const audioUnitsOf = (units: ReaderUnit[]) => units.filter((u) => u.audio_url);
+const videoUnitsOf = (units: ReaderUnit[]) => units.filter((u) => u.video_url);
 
 /** 从书架"翻开进入阅读"时，过渡层撤掉后等这么久再自动翻开封面 */
 const AUTO_OPEN_DELAY_MS = 300;
@@ -42,13 +47,18 @@ export default function ReaderPage() {
   const [flipping, setFlipping] = useState(false);
   const [closing, setClosing] = useState(false);
   const units = book?.units ?? NO_UNITS;
-  const hasAudio = units.some((u) => u.audio_url);
+  const [audioUnits, videoUnits] = useMemo(
+    () => [audioUnitsOf(units), videoUnitsOf(units)],
+    [units],
+  );
+  const hasAudio = audioUnits.length > 0;
+  const hasVideo = videoUnits.length > 0;
   // 封面动画（D96）：阅读页的第 1 页就是书架封面时，封面翻开前也在动
   const coverVideoUrl =
     book?.cover_video_url && book.cover_page_index === 0 ? book.cover_video_url : null;
   const coverSlot = slots?.indexOf(0) ?? -1;
   const readAloud = useReadAloud({
-    units,
+    units: audioUnits,
     readOrder: book?.read_order ?? "left_first",
     slots,
     flipping,
@@ -105,11 +115,19 @@ export default function ReaderPage() {
           onFlippingChange={setFlipping}
           onReady={onReady}
           overlay={
-            hasAudio || coverVideoUrl
+            hasAudio || hasVideo || coverVideoUrl
               ? (layout) => (
                   <>
+                    {hasVideo && (
+                      <PageVideos
+                        layout={layout}
+                        units={videoUnits}
+                        slots={slots}
+                        flipping={flipping}
+                      />
+                    )}
                     {coverVideoUrl && coverSlot !== -1 && (
-                      <CoverVideo
+                      <LoopVideo
                         src={coverVideoUrl}
                         active={!flipping}
                         className="absolute top-0 h-full object-cover"
@@ -119,7 +137,7 @@ export default function ReaderPage() {
                     {hasAudio && (
                       <ReadAloudSpeakers
                         layout={layout}
-                        units={units}
+                        units={audioUnits}
                         slots={slots}
                         flipping={flipping}
                       />

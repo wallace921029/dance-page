@@ -1,6 +1,6 @@
 """各服务商的适配器（docs/06-ai-tech-design.md 第 1、2 节）。
 
-连接测试、列模型、设计音色、朗读合成、首尾帧视频经由这里分派到各家适配器。
+连接测试、列模型、设计音色、朗读合成、动画视频经由这里分派到各家适配器。
 """
 
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ class ProviderError(Exception):
 class ModelInfo:
     id: str
     created: int = 0
-    # 更适合这项能力（如标明支持首尾帧的视频模型），排在前面
+    # 更适合这项能力的，排在前面
     preferred: bool = False
     # 服务商标记为即将下线
     retiring: bool = False
@@ -134,9 +134,10 @@ def submit_video(
     frame_jpeg: bytes,
     prompt: str,
     negative_prompt: str,
+    duration: int,
     resolution: str,
 ) -> str:
-    """提交首尾帧视频任务（首帧和尾帧都用同一张图，视频能无缝循环），返回服务商的任务 ID。"""
+    """以一张原画为首帧提交视频任务（之后做成来回播放的循环，D99），返回服务商的任务 ID。"""
     try:
         with http_client() as client:
             return _adapter(config.provider).submit_video(
@@ -146,6 +147,7 @@ def submit_video(
                 frame_jpeg=frame_jpeg,
                 prompt=prompt,
                 negative_prompt=negative_prompt,
+                duration=duration,
                 resolution=resolution,
             )
     except httpx.HTTPError as e:

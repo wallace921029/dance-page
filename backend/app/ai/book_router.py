@@ -23,7 +23,10 @@ from app.ai.book_schemas import (
     SpreadOut,
     SpreadSwitchesUpdate,
     UnitUpdate,
+    VideoGenerate,
 )
+from app.ai.catalog import CAPABILITIES
+from app.ai.schemas import VideoOptionsOut
 from app.ai.settings import (
     CapabilityConfig,
     load_active_config,
@@ -39,9 +42,10 @@ from app.ai.spreads import (
     unit_to_out,
     units_in_spread,
 )
-from app.ai.video import cover_frame_key, cover_source_hash
+from app.ai.video import cover_frame_key, cover_source_hash, unit_source_hash
 from app.ai.voices import current_voice, voice_state
 from app.books import storage
+from app.books.service import video_by_cover
 from app.clock import utcnow
 from app.deps import AppSettings, CurrentAdmin, DbSession
 from app.models import AiUnit, Book, Character, CharacterVoice, Job
@@ -118,7 +122,6 @@ def _current_audio_hash(unit: AiUnit, characters: Sequence[Character], tts: Capa
 def _cover_out(db: Session, book: Book) -> CoverVideoOut:
     has_video = book.cover_video_source_hash is not None
     video = load_active_config(db, "video")
-    resolution = str(video.options.get("resolution") or "720P")
     return CoverVideoOut(
         motion_prompt=book.cover_motion_prompt,
         status=book.cover_video_status,  # type: ignore[arg-type]
@@ -129,12 +132,32 @@ def _cover_out(db: Session, book: Book) -> CoverVideoOut:
             else None
         ),
         resolution=book.cover_video_resolution,
+        duration_s=book.cover_video_duration_s,
+        # 按封面生成时的时长和清晰度比较，临时换清晰度（D79）不算过期
         outdated=has_video
         and book.cover_video_source_hash
-        != cover_source_hash(book.cover_motion_prompt, video, resolution),
+        != cover_source_hash(
+            book.cover_motion_prompt,
+            video,
+            book.cover_video_duration_s or 0,
+            book.cover_video_resolution or "",
+        ),
         frame_changed=has_video
         and book.cover_video_frame != cover_frame_key(book.cover_page_index, book.assets_version),
         enabled_at=book.cover_video_enabled_at,
+    )
+
+
+def _video_options(video: CapabilityConfig) -> VideoOptionsOut | None:
+    """当前视频模型可选的时长、清晰度；默认值取 AI 配置里保存的。"""
+    options = CAPABILITIES["video"].providers[video.provider].video_options(video.model)
+    if options is None:
+        return None
+    return VideoOptionsOut(
+        durations=list(options.durations),
+        resolutions=list(options.resolutions),
+        default_duration=int(video.options.get("duration") or options.default_duration),
+        default_resolution=str(video.options.get("resolution") or options.default_resolution),
     )
 
 
@@ -158,6 +181,7 @@ def _book_ai_out(db: Session, book: Book) -> BookAiOut:
         if j.status in ("queued", "running", "waiting")
     ]
     tts = load_active_config(db, "tts")
+    video = load_active_config(db, "video")
     return BookAiOut(
         story=book.story,
         read_order=book.read_order,  # type: ignore[arg-type]
@@ -173,9 +197,11 @@ def _book_ai_out(db: Session, book: Book) -> BookAiOut:
             book,
             book.ai_units,
             {u.id: _current_audio_hash(u, book.characters, tts) for u in book.ai_units},
+            video,
         ),
         running_jobs=active_jobs,
         cover=_cover_out(db, book),
+        video_options=_video_options(video),
     )
 
 
@@ -438,6 +464,8 @@ def update_spread_switches(
                 _cancel_queued_audio(db, unit)
         if body.video_enabled is not None:
             unit.video_enabled = body.video_enabled
+            if not body.video_enabled:
+                _cancel_queued_video(db, unit)
     db.commit()
     return next(s for s in _book_ai_out(db, book).spreads if s.index == spread.index)
 
@@ -451,6 +479,19 @@ def _cancel_queued_audio(db: Session, unit: AiUnit) -> None:
         db.delete(job)
     if queued and unit.audio_status == "queued":
         unit.audio_status = "ready" if unit.audio_source_hash else "none"
+
+
+def _cancel_queued_video(db: Session, unit: AiUnit) -> None:
+    """撤掉还没提交的动画任务；已提交给服务商的（已付费）照常完成。"""
+    queued = db.scalars(
+        select(Job).where(
+            Job.unit_id == unit.id, Job.type == "ai_video_unit", Job.status == "queued"
+        )
+    ).all()
+    for job in queued:
+        db.delete(job)
+    if queued and unit.video_status == "queued":
+        unit.video_status = "ready" if unit.video_source_hash else "none"
 
 
 # ---------- 单元草稿与重做 ----------
@@ -470,7 +511,9 @@ def update_unit(unit_id: str, body: UnitUpdate, _admin: CurrentAdmin, db: DbSess
     db.commit()
     db.refresh(unit)
     return unit_to_out(
-        unit, _current_audio_hash(unit, unit.book.characters, load_active_config(db, "tts"))
+        unit,
+        _current_audio_hash(unit, unit.book.characters, load_active_config(db, "tts")),
+        load_active_config(db, "video"),
     )
 
 
@@ -512,7 +555,8 @@ def _active_job(db: Session, unit_id: str, job_type: str) -> Job | None:
         select(Job).where(
             Job.unit_id == unit_id,
             Job.type == job_type,
-            Job.status.in_(["queued", "running"]),
+            # waiting：视频已提交给服务商，等待查询
+            Job.status.in_(["queued", "running", "waiting"]),
         )
     )
 
@@ -555,14 +599,15 @@ def generate_all(
     _admin: CurrentAdmin,
     db: DbSession,
     settings: AppSettings,
-    # 动画（video）在 A4 加入
-    type: Literal["audio"] = Query(),
+    type: Literal["audio", "video"] = Query(),
 ) -> GenerateAllOut:
-    """把需要生成的单元（未生成、失败或台词 / 音色已改）都放进队列（docs/06 第 6.7 节）。"""
+    """把需要生成的单元（未生成、失败或草稿已改）都放进队列（docs/06 第 6.7 节）。"""
     book = _get_book_with_ai(db, book_id)
-    tts = _check_tts_credentials(db, settings)
-
     units = sorted(book.ai_units, key=lambda u: u.first_page_index)
+    if type == "video":
+        video = _check_video_credentials(db, settings)
+        return GenerateAllOut(queued=_enqueue_videos(db, book, units, video, only_needed=True))
+    tts = _check_tts_credentials(db, settings)
     return GenerateAllOut(queued=_enqueue_audios(db, book, units, tts, only_needed=True))
 
 
@@ -631,18 +676,18 @@ def get_unit_audio(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: 
 
 @router.post("/admin/books/{book_id}/ai/cover-video", status_code=status.HTTP_202_ACCEPTED)
 def generate_cover_video(
-    book_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str,
+    _admin: CurrentAdmin,
+    db: DbSession,
+    settings: AppSettings,
+    body: VideoGenerate | None = None,
 ) -> JobEnqueuedOut:
-    """用当前封面和动作描述生成（或重新生成）封面动画。"""
+    """用当前封面和动作描述生成（或重新生成）封面动画，可临时指定时长、清晰度（D79）。"""
     book = _get_book_with_ai(db, book_id)
     if book.processing_status != "ready":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "绘本尚未拆页完成")
-    video = load_active_config(db, "video")
-    missing = missing_credentials(
-        "video", video.provider, load_credentials(settings, video.provider)
-    )
-    if missing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"请先在 .env 中设置 {'、'.join(missing)}")
+    video = _check_video_credentials(db, settings)
+    payload = _video_overrides(video, body)
 
     existing = db.scalar(
         select(Job).where(
@@ -655,7 +700,7 @@ def generate_cover_video(
         return JobEnqueuedOut(job_id=existing.id, status=existing.status)
     book.cover_video_status = "queued"
     book.cover_video_error = None
-    job = Job(type="ai_cover_video", book_id=book_id)
+    job = Job(type="ai_cover_video", book_id=book_id, payload=payload or None)
     db.add(job)
     db.commit()
     return JobEnqueuedOut(job_id=job.id, status="queued")
@@ -692,5 +737,163 @@ def enable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> Boo
 def disable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     book.cover_video_enabled_at = None
+    db.commit()
+    return _book_ai_out(db, book)
+
+
+# ---------- 开页动画（A4） ----------
+
+
+def _check_video_credentials(db: Session, settings: AppSettings) -> CapabilityConfig:
+    video = load_active_config(db, "video")
+    missing = missing_credentials(
+        "video", video.provider, load_credentials(settings, video.provider)
+    )
+    if missing:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"请先在 .env 中设置 {'、'.join(missing)}")
+    return video
+
+
+def _video_overrides(video: CapabilityConfig, body: VideoGenerate | None) -> dict:
+    """临时指定的时长、清晰度（D79）：只能选当前模型支持的；返回要放进 jobs.payload 的部分。"""
+    payload: dict = {}
+    if body is None or (body.duration is None and body.resolution is None):
+        return payload
+    options = _video_options(video)
+    if options is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "当前视频模型不能指定时长和清晰度")
+    if body.duration is not None:
+        if body.duration not in options.durations:
+            allowed = "、".join(f"{d} 秒" for d in options.durations)
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"该模型的视频时长只能选 {allowed}")
+        payload["duration"] = body.duration
+    if body.resolution is not None:
+        if body.resolution not in options.resolutions:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"该模型的清晰度只能选 {'、'.join(options.resolutions)}",
+            )
+        payload["resolution"] = body.resolution
+    return payload
+
+
+def _video_problem(book: Book, unit: AiUnit) -> str | None:
+    """单元为什么不能生成动画；能生成时为 None。"""
+    if video_by_cover(book, unit):
+        return "第 1 页是封面，由封面动画负责"
+    if not unit.video_enabled:
+        return "这个开页已关闭动画"
+    if not (unit.motion_prompt or "").strip():
+        return "请先填写动作描述"
+    return None
+
+
+def _enqueue_video(db: Session, unit: AiUnit, payload: dict | None = None) -> Job:
+    unit.video_status = "queued"
+    unit.video_error = None
+    job = Job(type="ai_video_unit", book_id=unit.book_id, unit_id=unit.id, payload=payload)
+    db.add(job)
+    return job
+
+
+def _enqueue_videos(
+    db: Session, book: Book, units: list[AiUnit], video: CapabilityConfig, *, only_needed: bool
+) -> int:
+    """把单元放进动画队列，返回放入的数量。跳过封面页、关闭了动画（D95）、没填动作描述、
+    已在队列里的；only_needed 时也跳过已是最新的（按单元上次生成时的时长和清晰度比较）。"""
+    count = 0
+    for unit in units:
+        if _video_problem(book, unit) or _active_job(db, unit.id, "ai_video_unit"):
+            continue
+        if only_needed and unit.video_status == "ready" and unit.video_source_hash is not None:
+            current = unit_source_hash(
+                unit.motion_prompt, video, unit.video_duration_s or 0, unit.video_resolution or ""
+            )
+            if current == unit.video_source_hash:
+                continue
+        _enqueue_video(db, unit)
+        count += 1
+    db.commit()
+    return count
+
+
+@router.post("/admin/ai/units/{unit_id}/video", status_code=status.HTTP_202_ACCEPTED)
+def generate_unit_video(
+    unit_id: str,
+    _admin: CurrentAdmin,
+    db: DbSession,
+    settings: AppSettings,
+    body: VideoGenerate | None = None,
+) -> JobEnqueuedOut:
+    """生成（或重新生成）该单元的动画，可临时指定时长、清晰度（D79）。"""
+    unit = db.get(AiUnit, unit_id)
+    if unit is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "单元不存在")
+    problem = _video_problem(unit.book, unit)
+    if problem:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    video = _check_video_credentials(db, settings)
+
+    payload = _video_overrides(video, body)
+
+    existing = _active_job(db, unit_id, "ai_video_unit")
+    if existing:
+        return JobEnqueuedOut(job_id=existing.id, status=existing.status)
+    job = _enqueue_video(db, unit, payload or None)
+    db.commit()
+    return JobEnqueuedOut(job_id=job.id, status="queued")
+
+
+@router.post(
+    "/admin/books/{book_id}/ai/spreads/{first_page}/video", status_code=status.HTTP_202_ACCEPTED
+)
+def generate_spread_video(
+    book_id: str, first_page: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+) -> GenerateAllOut:
+    """生成（或重新生成）这个开页里所有单元的动画。"""
+    book = _get_book_with_ai(db, book_id)
+    _, units = _spread_or_404(book, first_page)
+    problems = [p for u in units if (p := _video_problem(book, u))]
+    if len(problems) == len(units):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, problems[0])
+    video = _check_video_credentials(db, settings)
+    return GenerateAllOut(queued=_enqueue_videos(db, book, units, video, only_needed=False))
+
+
+@router.get("/admin/ai/units/{unit_id}/video", response_class=FileResponse)
+def get_unit_video(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings):
+    unit = db.get(AiUnit, unit_id)
+    if unit is None or unit.video_source_hash is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "动画不存在")
+    path = storage.ai_video_path(settings, unit.book_id, unit_id)
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "动画不存在")
+    return FileResponse(
+        path, media_type="video/mp4", headers={"Cache-Control": MEDIA_CACHE_CONTROL}
+    )
+
+
+# ---------- Dance Ready! ----------
+
+
+@router.put("/admin/books/{book_id}/ai/dance-ready")
+def confirm_dance_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+    """确认 Dance Ready!：读者从此能看到已生成的开页动画（D61）。与 Voice Ready 相互独立（D67）。"""
+    book = _get_book_with_ai(db, book_id)
+    if not any(
+        u.video_source_hash is not None and u.video_enabled and not video_by_cover(book, u)
+        for u in book.ai_units
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "还没有生成任何动画")
+    if book.dance_ready_at is None:
+        book.dance_ready_at = utcnow()
+        db.commit()
+    return _book_ai_out(db, book)
+
+
+@router.delete("/admin/books/{book_id}/ai/dance-ready")
+def cancel_dance_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+    book = _get_book_with_ai(db, book_id)
+    book.dance_ready_at = None
     db.commit()
     return _book_ai_out(db, book)

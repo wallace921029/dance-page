@@ -9,8 +9,10 @@ from app.books.service import (
     page_url,
     reader_audio_url,
     reader_cover_video_url,
+    reader_video_url,
+    video_by_cover,
 )
-from app.models import Book
+from app.models import AiUnit, Book
 
 Language = Literal["zh", "en"]
 Orientation = Literal["portrait", "landscape"]
@@ -81,25 +83,45 @@ class ReaderUnitOut(BaseModel):
 
     # 单元覆盖的页码：单页，或合并生成的左右两页
     pages: list[int]
+    # 朗读（Voice Ready 后才有）
     audio_url: str | None
     audio_duration_ms: int | None
-    # 动画在 A4 加入
-    video_url: str | None = None
+    # 动画（Dance Ready! 后才有）：合并单元的视频是两页宽，左页放左半边、右页放右半边（D74）
+    video_url: str | None
+
+
+def reader_has_audio(book: Book, unit: AiUnit) -> bool:
+    # 开页关闭朗读后读者听不到（D95）
+    return (
+        book.voice_ready_at is not None
+        and unit.audio_source_hash is not None
+        and unit.audio_enabled
+    )
+
+
+def reader_has_video(book: Book, unit: AiUnit) -> bool:
+    return (
+        book.dance_ready_at is not None
+        and unit.video_source_hash is not None
+        and unit.video_enabled
+        and not video_by_cover(book, unit)
+    )
 
 
 def _reader_units(book: Book) -> list[ReaderUnitOut]:
-    if book.voice_ready_at is None:
-        return []
-    return [
-        ReaderUnitOut(
-            pages=list(range(u.first_page_index, u.first_page_index + u.page_count)),
-            audio_url=reader_audio_url(book, u),
-            audio_duration_ms=u.audio_duration_ms,
-        )
-        for u in sorted(book.ai_units, key=lambda u: u.first_page_index)
-        # 开页关闭朗读后读者听不到（D95）
-        if u.audio_source_hash is not None and u.audio_enabled
-    ]
+    units = []
+    for u in sorted(book.ai_units, key=lambda u: u.first_page_index):
+        audio, video = reader_has_audio(book, u), reader_has_video(book, u)
+        if audio or video:
+            units.append(
+                ReaderUnitOut(
+                    pages=list(range(u.first_page_index, u.first_page_index + u.page_count)),
+                    audio_url=reader_audio_url(book, u) if audio else None,
+                    audio_duration_ms=u.audio_duration_ms if audio else None,
+                    video_url=reader_video_url(book, u) if video else None,
+                )
+            )
+    return units
 
 
 class ReaderBookOut(ShelfBookOut):

@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
+from app.ai.schemas import VideoOptionsOut
+
 
 class LineItem(BaseModel):
     character_id: int | None = None
@@ -97,6 +99,12 @@ class AiUnitOut(BaseModel):
     audio_url: str | None
     # 台词或音色在生成朗读之后改过，需要重新生成
     audio_outdated: bool
+    # 已生成的动画（后台预览）；重新生成期间仍可看旧的
+    video_url: str | None
+    # 动作描述或视频模型在生成动画之后改过，需要重新生成
+    video_outdated: bool
+    # 第 1 页是封面：由封面动画负责，不单独生成开页动画
+    video_by_cover: bool
 
 
 class SpreadOut(BaseModel):
@@ -134,7 +142,8 @@ class CoverVideoOut(BaseModel):
     # 已生成的视频（后台预览）；重新生成期间仍可看旧的
     video_url: str | None
     resolution: str | None
-    # 动作描述、模型或清晰度在生成之后改过
+    duration_s: int | None
+    # 动作描述或视频模型在生成之后改过
     outdated: bool
     # 生成之后换了封面（或重新拆页），旧动画对不上，读者看不到
     frame_changed: bool
@@ -150,6 +159,8 @@ class BookAiOut(BaseModel):
     spreads: list[SpreadOut]
     running_jobs: list[AiJobOut]
     cover: CoverVideoOut
+    # 当前动画视频模型可选的时长、清晰度，默认值来自 AI 配置（生成时可临时修改，D79）
+    video_options: VideoOptionsOut | None
 
 
 class BookAiUpdate(BaseModel):
@@ -170,6 +181,13 @@ class SpreadSwitchesUpdate(BaseModel):
 class UnitUpdate(BaseModel):
     lines: list[LineItem] | None = None
     motion_prompt: str | None = None
+
+
+class VideoGenerate(BaseModel):
+    """生成动画时临时指定的时长、清晰度（D79）；不填用 AI 配置里的默认值。"""
+
+    duration: int | None = None
+    resolution: str | None = None
 
 
 class GenerateAllOut(BaseModel):

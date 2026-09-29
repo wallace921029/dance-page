@@ -110,6 +110,7 @@ class Book(Base):
     # 生成时用的封面："{cover_page_index}:{assets_version}"。换了封面后旧动画对不上，读者不再看到
     cover_video_frame: Mapped[str | None] = mapped_column(String(32))
     cover_video_resolution: Mapped[str | None] = mapped_column(String(16))
+    cover_video_duration_s: Mapped[int | None]
     # 管理员确认后读者才能看到；为空表示未启用
     cover_video_enabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

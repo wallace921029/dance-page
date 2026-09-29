@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.book_schemas import AiUnitOut, LineItem, SpreadOut
+from app.ai.settings import CapabilityConfig
 from app.ai.speech import audio_outdated
+from app.ai.video import unit_source_hash
+from app.books.service import video_by_cover
 from app.books.storage import delete_ai_unit_files
 from app.config import Settings
 from app.models import AiUnit, Book
@@ -60,8 +63,30 @@ def unit_audio_url(unit: AiUnit) -> str | None:
     return f"/api/admin/ai/units/{unit.id}/audio?v={unit.audio_version}"
 
 
-def unit_to_out(unit: AiUnit, current_audio_hash: str | None = None) -> AiUnitOut:
-    """current_audio_hash：按当前台词和音色算出的指纹，用来判断朗读是否需要重新生成。"""
+def unit_video_url(unit: AiUnit) -> str | None:
+    if unit.video_source_hash is None:
+        return None
+    return f"/api/admin/ai/units/{unit.id}/video?v={unit.video_version}"
+
+
+def video_outdated(unit: AiUnit, video: CapabilityConfig | None) -> bool:
+    """动作描述改过或换了视频模型；按单元生成时的时长和清晰度比较，临时换清晰度（D79）不算。"""
+    if unit.video_source_hash is None or video is None:
+        return False
+    current = unit_source_hash(
+        unit.motion_prompt,
+        video,
+        unit.video_duration_s or 0,
+        unit.video_resolution or "",
+    )
+    return current != unit.video_source_hash
+
+
+def unit_to_out(
+    unit: AiUnit, current_audio_hash: str | None = None, video: CapabilityConfig | None = None
+) -> AiUnitOut:
+    """current_audio_hash：按当前台词和音色算出的指纹，用来判断朗读是否需要重新生成；
+    video：当前的动画视频设置，用来判断动画是否需要重新生成。"""
     return AiUnitOut(
         id=unit.id,
         book_id=unit.book_id,
@@ -86,17 +111,24 @@ def unit_to_out(unit: AiUnit, current_audio_hash: str | None = None) -> AiUnitOu
         updated_at=unit.updated_at,
         audio_url=unit_audio_url(unit),
         audio_outdated=audio_outdated(unit, current_audio_hash),
+        video_url=unit_video_url(unit),
+        video_outdated=video_outdated(unit, video),
+        video_by_cover=video_by_cover(unit.book, unit),
     )
 
 
 def build_spreads_out(
-    book: Book, units: Sequence[AiUnit], audio_hashes: Mapping[str, str | None] | None = None
+    book: Book,
+    units: Sequence[AiUnit],
+    audio_hashes: Mapping[str, str | None] | None = None,
+    video: CapabilityConfig | None = None,
 ) -> list[SpreadOut]:
-    """把绘本和它的 AiUnits 组装为前端所需的开页列表。audio_hashes：单元 ID → 当前朗读指纹。"""
+    """把绘本和它的 AiUnits 组装为前端所需的开页列表。audio_hashes：单元 ID → 当前朗读指纹；
+    video：当前的动画视频设置。"""
     hashes = audio_hashes or {}
 
     def out(unit: AiUnit) -> AiUnitOut:
-        return unit_to_out(unit, hashes.get(unit.id))
+        return unit_to_out(unit, hashes.get(unit.id), video)
 
     def spread(item: SpreadLayoutItem, mode: str, spread_units: list[AiUnitOut]) -> SpreadOut:
         return SpreadOut(

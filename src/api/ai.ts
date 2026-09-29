@@ -167,14 +167,14 @@ export function useGenerateUnitAudio(bookId: string) {
   });
 }
 
-/** 全部生成朗读：未生成、失败或台词 / 音色已改的单元放进队列，返回放入的单元数 */
-export function useGenerateAllAudio(bookId: string) {
+/** 全部生成朗读或动画：未生成、失败或草稿已改的单元放进队列，返回放入的单元数 */
+export function useGenerateAll(bookId: string, type: "audio" | "video") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () =>
       (
         await api.post<{ queued: number }>(`/admin/books/${bookId}/ai/generate-all`, null, {
-          params: { type: "audio" },
+          params: { type },
         })
       ).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
@@ -224,13 +224,17 @@ export function useGenerateSpreadAudio(bookId: string) {
   });
 }
 
-/** 用当前封面和动作描述生成（或重新生成）封面动画（D96） */
+/** 用当前封面和动作描述生成（或重新生成）封面动画（D96）；可临时指定时长、清晰度（D79） */
 export function useGenerateCoverVideo(bookId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () =>
-      (await api.post<{ job_id: number; status: string }>(`/admin/books/${bookId}/ai/cover-video`))
-        .data,
+    mutationFn: async (body: { duration?: number; resolution?: string } = {}) =>
+      (
+        await api.post<{ job_id: number; status: string }>(
+          `/admin/books/${bookId}/ai/cover-video`,
+          body,
+        )
+      ).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
   });
 }
@@ -245,6 +249,51 @@ export function useSetCoverVideoEnabled(bookId: string) {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(bookAiKey(bookId), data);
+      void queryClient.invalidateQueries({ queryKey: ["shelf"] });
+    },
+  });
+}
+
+/** 生成（或重新生成）单元动画；可临时指定时长、清晰度（D79），不填用 AI 配置里的默认值 */
+export function useGenerateUnitVideo(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      unitId,
+      ...body
+    }: {
+      unitId: string;
+      duration?: number;
+      resolution?: string;
+    }) =>
+      (await api.post<{ job_id: number; status: string }>(`/admin/ai/units/${unitId}/video`, body))
+        .data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 生成（或重新生成）这个开页里所有单元的动画 */
+export function useGenerateSpreadVideo(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (firstPage: number) =>
+      (await api.post<{ queued: number }>(`/admin/books/${bookId}/ai/spreads/${firstPage}/video`))
+        .data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: bookAiKey(bookId) }),
+  });
+}
+
+/** 确认 / 取消 Dance Ready!：确认后读者能看到已生成的开页动画（D61） */
+export function useSetDanceReady(bookId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ready: boolean) => {
+      const url = `/admin/books/${bookId}/ai/dance-ready`;
+      return (ready ? await api.put<BookAi>(url) : await api.delete<BookAi>(url)).data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(bookAiKey(bookId), data);
+      // 书架上的"Dance Ready!"招牌、阅读页的动画跟着变
       void queryClient.invalidateQueries({ queryKey: ["shelf"] });
     },
   });
