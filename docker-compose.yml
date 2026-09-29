@@ -1,29 +1,86 @@
-# 部署：cp .env.example .env，填好管理员账号密码后 docker compose up -d --build
-# Nginx 由部署者自行配置：/api/ 转发到 127.0.0.1:8000，/ 指向前端构建产物 dist/
+# 一键部署：
+#   cp .env.example .env    # 填好管理员账号密码、AI Key；没有 HTTPS 时把 COOKIE_SECURE 设为 false
+#   docker-compose up -d    # （新版 Docker 也可以写 docker compose up -d）
+# 然后访问 http://服务器:8080（端口可在 .env 里用 WEB_PORT 改）。
+#
+# 三个服务：
+#   web     Nginx：托管前端页面，并把 /api 转发给 api
+#   api     后端接口（启动时自动执行数据库迁移）
+#   worker  后台任务：PDF 拆页、AI 分析 / 朗读 / 动画视频
+# 数据（数据库、原始 PDF、页面图、AI 产物）都在宿主机的 DATA_PATH 目录（默认 ./data），备份它即可。
+#
+# 已有自己的 Nginx（域名、HTTPS）时：在 .env 里设 WEB_BIND=127.0.0.1，再让你的 Nginx 把整个站点转发到
+# http://127.0.0.1:WEB_PORT，并带上 X-Forwarded-For；不需要再单独配置 /api 和静态文件。
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   api:
     build: ./backend
-    image: dance-page-backend
+    image: firefly-tales-backend
     env_file: .env
     environment:
       DATA_DIR: /data
     volumes:
-      - ./data:/data
-    ports:
-      # 只监听本机，由 Nginx 对外提供服务
-      - "127.0.0.1:${API_PORT:-8000}:8000"
+      - ${DATA_PATH:-./data}:/data
+    # 不对外发布端口：只有 web 通过内部网络访问它
+    expose:
+      - "8000"
+    healthcheck:
+      # 数据库迁移在启动时执行，迁移完成、开始提供服务后才算健康（worker 和 web 会等它）
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/openapi.json', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
-  # 后台任务（PDF 拆页）。与 api 共用镜像和数据目录；数据库迁移由 api 启动时执行，worker 会等待
   worker:
     build: ./backend
-    image: dance-page-backend
+    image: firefly-tales-backend
     command: ["python", "-m", "app.worker"]
     env_file: .env
     environment:
       DATA_DIR: /data
     volumes:
-      - ./data:/data
+      - ${DATA_PATH:-./data}:/data
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # 国内服务器构建前端慢时，在 .env 里设 NPM_REGISTRY=https://registry.npmmirror.com
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    image: firefly-tales-web
+    ports:
+      # WEB_BIND 默认对所有网卡开放；前面有自己的 Nginx 时设成 127.0.0.1
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *logging
     restart: unless-stopped

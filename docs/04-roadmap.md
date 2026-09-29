@@ -20,7 +20,7 @@
 | M1 后端骨架与账户 | 项目结构、数据库迁移、管理员同步、登录 / 注册 / 会话、邀请码、读者管理 | ✅ |
 | M2 上传与拆页 | 上传接口、Worker、拆页、Admin 绘本列表与编辑 | ✅ |
 | M3 阅读端 | 小剧场书架、翻页阅读、横竖版排版、全屏；之后追加搜索、收藏、四套书架主题、书本动效、手绘工具栏 | ✅ |
-| M4 打磨与上线 | 添加到主屏幕、Nginx 参考配置、部署说明、备份 | 🟡 ✅ 添加到主屏幕；⬜ Nginx 参考配置；⬜ 部署说明；⬜ 备份 |
+| M4 打磨与上线 | 添加到主屏幕、一键部署（Docker Compose + 内置 Nginx）、部署说明、备份 | 🟡 ✅ 添加到主屏幕；✅ 一键部署与部署说明（D113）；⬜ 在真实服务器上跑一遍；⬜ 备份脚本 |
 
 ## 3. AI 阶段里程碑
 
@@ -40,9 +40,8 @@
 
 ### 上线前（M4）
 
-- **Nginx 参考配置**：`client_max_body_size 210m`；上传接口加大超时；SPA 回退到 `index.html`；`/api/` 转发到 `127.0.0.1:8000`；`.webmanifest` 的 `application/manifest+json` 类型（较旧的 Nginx `mime.types` 里没有）；视频、音频接口要保留分段请求（Range）。
-- **部署说明**：`.env`（含 AI Key、`COOKIE_SECURE`）、`docker compose up -d --build`、`npm run build` 后把 `dist/` 交给 Nginx。
-- **备份**：SQLite 在线备份命令 + `books/` 目录同步的脚本或说明（见 [05 第 4 节](./05-tech-design.md#4-部署)）。
+- **一键部署已经做好**（D113）：`docker-compose up -d`，内置 Nginx（`web` 服务）托管前端并转发 `/api`，部署说明在根目录 `README.md` 和 [05 第 4 节](./05-tech-design.md#4-部署)。**还要在真实的云服务器上完整跑一遍**（拉取镜像、构建、访问、上传一本书、AI 生成）。
+- **备份**：现在只给了建议（SQLite 在线备份命令 + `books/` 目录同步），还没有现成的脚本。
 - **iPad 真机实测**：验证清单在 [progress.md](./progress.md#ipad-验证清单)。
 - **用真实 API 确认动画效果**：封面动画、开页动画（见 progress.md 的断点）。
 - 视情况：Admin 页面预览改用缩略图（现在直接加载 2048px 大图）、Docker 镜像多阶段构建瘦身。

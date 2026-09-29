@@ -39,7 +39,7 @@ uv run scripts/ai_trial.py --step all   # A0 real-API trial (steps: vision/voice
 # home-screen icons (repo root; renders the SVG in scripts/make-icons.py with local Chrome → public/icons/*.png)
 uv run scripts/make-icons.py
 
-# deploy (repo root): cp .env.example .env && docker compose up -d --build
+# deploy (repo root): cp .env.example .env && docker-compose up -d   # web (Nginx + built frontend) / api / worker; see README.md and docs/05 §4
 ```
 
 `npm run build` is the only type-check step; `tsconfig.app.json` enables `noUnusedLocals`/`noUnusedParameters`, `verbatimModuleSyntax` (use `import type` for type-only imports), and `erasableSyntaxOnly` (no `enum`, `namespace`, or constructor parameter properties).

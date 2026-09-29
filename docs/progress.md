@@ -1,6 +1,6 @@
 # 项目进度与交接
 
-> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D112**（下一个 **D113**）
+> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D113**（下一个 **D114**）
 >
 > **给接手的 Claude / 开发者**：这是继续工作的入口。用户说"继续我们的任务"时，按顺序读：本文件 → `CLAUDE.md` → [README](./README.md) 里与当前任务相关的文档，然后按"下次开始时"一节执行。每次工作结束前更新本文件（一句话现状、断点、待决问题、下次开始时）和文档开头的决策编号。
 
@@ -41,6 +41,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 - **改 `.env` 或新增迁移后要重启 `dev.sh`**：`--reload` 只监听 `backend/app/` 下的 Python 代码，迁移在 API 启动时执行。
 - **macOS**：`scripts/dev.sh` 兼容系统自带的 bash 3.2（不用 `wait -n`）；Ctrl+C 后 API、Worker、Vite 都会在 1–2 秒内退出。
 - **Vite 缓存**：两个开发服务器不要共用 `node_modules/.vite`，否则浏览器可能加载到两份 React 而报 `useId` 错误；另开一套时用 `VITE_CACHE_DIR` 指定别的目录。
+- **Docker 部署的验证方式**：在本机用一个不冲突的项目名和端口验证（`docker compose -p firefly-e2e …`，`.env` 里的 `WEB_PORT`、`DATA_PATH` 指向临时位置），验证完 `docker compose -p firefly-e2e down -v` 并删掉临时的根目录 `.env`；不要动本机上其他项目的容器。镜像里 Python 是 3.14，开发环境是 3.13，改后端依赖后两边的测试都要跑。
 - **文件监听数上限**：Vite 启动报 `EMFILE: too many open files, watch …` 时，是系统的 inotify 实例数（`/proc/sys/fs/inotify/max_user_instances`，默认 128）被其他程序占满了。可以关掉不用的开发服务器 / 编辑器窗口，或由用户自己调高该限制（需要 root）。端到端测试可改用不监听文件的方式：`npm run build` 后 `API_PROXY_TARGET=http://127.0.0.1:8010 npx vite preview --port 5180 --strictPort`，后端直接 `DATA_DIR=<临时目录> backend/.venv/bin/uvicorn --factory app.main:create_app --port 8010`。
 - **`dev.sh` 的一个已知问题**：Vite 启动即崩溃时，脚本没有把后端和 Worker 一起停掉，会一直挂着，需要手动结束。原因未确认，暂未处理。
 - **小小管理员被授权 / 取消后**，已经打开的页面要刷新才能看到新的入口（服务端权限是立即生效的）。
@@ -67,7 +68,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 2. 向用户简要汇报当前位置（见"一句话现状"），先问断点 1–4 有没有结果、"待决问题"有没有决定：
    - 动画动作太大、太小、凭空多出东西或文字抖动：调整 `backend/app/ai/video.py` 的 `PROMPT_TEMPLATE` / `NEGATIVE_PROMPT`，以及 `vision.py` 的 `MOTION_RULES` / `describe_cover_motion` 措辞（改模板会让已生成的动画显示"需要重新生成"）；也可以对比 `prompt_extend`（百炼提示词扩写，现在打开）开 / 关的效果。
    - 合并开页的视频两半与页面对不齐：看 `src/pages/stage/page-videos.tsx`（`object-fill` 拉伸铺满）和服务商输出的宽高比。
-3. 没有反馈要处理时，推进 **M4 上线收尾**（Nginx 参考配置、部署说明、备份，见 [04 路线图](./04-roadmap.md#4-待做)）；iPad 真机结果回来后按清单修问题。
+3. 没有反馈要处理时，推进 **M4 上线收尾**：一键部署（D113）已做好并在本机验证过，还差在真实服务器上完整跑一遍、备份脚本（见 [04 路线图](./04-roadmap.md#4-待做)）；iPad 真机结果回来后按清单修问题。
 
 ## 已知问题
 

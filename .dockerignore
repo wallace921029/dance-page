@@ -1,0 +1,14 @@
+# 前端镜像（Dockerfile.web）的构建上下文是仓库根目录，这些都不需要送进去
+.git
+.github
+node_modules
+dist
+backend
+data
+docs
+samples
+scripts
+.env
+.env.*
+!.env.example
+*.md

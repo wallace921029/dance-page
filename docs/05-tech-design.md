@@ -8,9 +8,12 @@
 平板 / 电脑浏览器
    │
    ▼
-Nginx（用户自行配置，含域名 / HTTPS）
+（可选）用户自己的 Nginx / 负载均衡：域名、HTTPS
+   │
+   ▼
+web（Docker 里的 Nginx）
    ├── /          → 前端静态文件（Vite 构建产物，React SPA）
-   └── /api/*     → FastAPI（uvicorn，127.0.0.1:8000）
+   └── /api/*     → api：FastAPI（uvicorn，只在 Docker 内部网络里监听 8000）
                         │
                         ├── SQLite（app.db，WAL 模式）
                         ├── 本地磁盘 DATA_DIR（原始 PDF、页面图片、AI 产物）
@@ -25,8 +28,8 @@ Worker 进程（后台任务）──┘  轮询 jobs 表：PDF 拆页、AI 分�
 | 数据库 | SQLite + SQLAlchemy 2.0 + Alembic | 单服务器、小范围使用，无需单独维护数据库服务；Alembic 管理表结构迁移，**API 启动时自动执行 `upgrade head`** |
 | 文件存储 | 服务器本地磁盘 | 512GB 足够，见 [01 - 存储](./01-product-overview.md#存储与图片质量) |
 | 后台任务 | 独立 Worker 进程 + 数据库任务表 | 拆页、视频下载处理是重活，不能拖慢 API；任务记录在库里，服务重启不丢；不需要引入 Redis |
-| 反向代理 | Nginx（用户自行配置） | 用户已有 Nginx 运维经验；域名、HTTPS 由用户负责（D39） |
-| 部署 | Docker Compose（api / worker 两个服务） | 一条命令启动，环境可复现 |
+| 前端托管与反向代理 | Docker 里的 Nginx（`web` 服务） | 一条命令带起整套；域名、HTTPS 仍由用户在前面自己的 Nginx 上配置（D39、D113） |
+| 部署 | Docker Compose（`web` / `api` / `worker` 三个服务） | `docker-compose up -d` 一键部署，环境可复现 |
 
 ## 2. 后端
 
@@ -67,7 +70,7 @@ backend/
 | `MAX_UPLOAD_MB` | 上传上限，默认 200 |
 | `COOKIE_SECURE` | 会话 Cookie 是否带 `Secure`，默认 `true`；未配置 HTTPS 时设为 `false` |
 | `DASHSCOPE_API_KEY`、`VOLCENGINE_ARK_API_KEY`、`VOLCENGINE_SPEECH_API_KEY` | AI 服务商凭据（D82），见 [06 第 3 节](./06-ai-tech-design.md#3-ai-配置)；不用的服务商可以留空 |
-| `API_PORT` | 仅 Docker Compose 使用：API 在本机监听的端口，默认 8000 |
+| `WEB_PORT`、`WEB_BIND`、`DATA_PATH` | 仅 Docker Compose 使用：网站对外端口（默认 8080）、监听的网卡（默认 `0.0.0.0`；前面有自己的 Nginx 时设 `127.0.0.1`）、数据目录在宿主机上的位置（默认 `./data`），见第 4 节 |
 
 部署时写在仓库根目录的 `.env`（模板 `.env.example`），本地开发写在 `backend/.env`（模板 `backend/.env.example`）。
 
@@ -301,22 +304,32 @@ Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui（`base-nova` 风格，�
 
 ## 4. 部署
 
+一条命令部署（D113）：
+
+```bash
+cp .env.example .env    # 填好管理员账号密码、AI Key；没有 HTTPS 时把 COOKIE_SECURE 设为 false
+docker-compose up -d    # 新版 Docker 也可以写 docker compose up -d；第一次会构建镜像，需要几分钟
+# 然后访问 http://服务器:8080
+```
+
 ```
 docker compose（仓库根目录 docker-compose.yml）
-├── api      # uvicorn --factory app.main:create_app（单进程），端口只绑定 127.0.0.1:8000
-└── worker   # python -m app.worker
-共享数据目录：仓库根目录 ./data → 容器内 /data
+├── web      # Dockerfile.web：node:24 构建前端 → nginx:stable-alpine 托管，并把 /api/ 转发给 api；对外发布 WEB_PORT
+├── api      # backend/Dockerfile：uvicorn --factory app.main:create_app（单进程）；不对外发布端口；启动时自动迁移数据库
+└── worker   # 同一个镜像，命令 python -m app.worker；等 api 健康后才启动
 
-用户自行配置的 Nginx
-├── /       → 前端构建产物 dist/（SPA，未命中的路径回退到 index.html）
-└── /api/   → http://127.0.0.1:8000
+数据：宿主机的 DATA_PATH（默认 ./data）→ 容器内 /data，api 和 worker 共用
 ```
 
-- 域名和 HTTPS 由用户在 Nginx 上自行配置，本项目不处理。
-- 项目要提供一份 Nginx 配置参考片段（待做，见 04 路线图），需要注意：`client_max_body_size 210m`（略高于应用层的 200MB，由后端返回清晰的中文错误提示）；上传接口适当调大 `proxy_read_timeout` / `proxy_request_buffering`；`.webmanifest` 的 MIME 类型；视频、音频保留 Range 请求。
+- **镜像版本**：Node 24（当前 LTS）、Python 3.14（Python 没有 LTS，用最新稳定版；后端测试在 3.14 上全部通过，开发环境的 `.python-version` 仍是 3.13，`requires-python` 是 `>=3.13`，两者都受支持）、Nginx `stable` 分支、uv 固定小版本。后端 Dockerfile 是多阶段构建，最终镜像不带 uv 和下载缓存。
+- **启动顺序**：api 通过健康检查（数据库迁移完成、开始提供服务）之后，worker 和 web 才启动；api 重启后 web 的 Nginx 会通过 Docker DNS 自动找到新地址，不需要重启 web。
+- **非 root 运行**：api / worker 进程以普通用户运行。入口脚本 `backend/docker-entrypoint.sh` 以 root 启动，把挂载进来的数据目录交给该用户后再降权，所以宿主机上的 `./data`（Docker 第一次会以 root 身份创建）不用手动 `chown`。
+- **Nginx 配置**在 `deploy/nginx.conf`：单页应用回退到 `index.html`；`/assets/`（带哈希的构建产物）缓存一年、`index.html` 不缓存；`client_max_body_size 210m`（略高于应用层的 200MB，由后端返回清晰的中文错误提示）；上传接口不在 Nginx 里整个缓存请求体、超时放宽到 600 秒；视频、音频的 Range 请求原样透传；`.webmanifest` 的 MIME 类型。
+- **真实客户端 IP**（登录、注册限流按 IP 计数）：`web` 只信任私有地址段发来的 `X-Forwarded-For`，从公网直接连进来的请求自带的 `X-Forwarded-For` 一律忽略，防止伪造 IP 绕过限流；前面有自己的 Nginx 时，让它带上 `X-Forwarded-For` 即可。
+- **前面有自己的 Nginx（域名、HTTPS）时**：`.env` 里设 `WEB_BIND=127.0.0.1`，让你的 Nginx 把整个站点转发到 `http://127.0.0.1:8080`（不需要再单独配置 `/api` 和静态文件），并带上 `X-Forwarded-For`。
 - 如果不配 HTTPS，需设置 `COOKIE_SECURE=false`，否则浏览器不会保存登录 Cookie。
-- worker 与 api 共用镜像和 `.env`（AI Key 也在里面），迁移由 api 启动时执行，worker 会等待。
-- **备份建议**：每天用 SQLite 的在线备份命令导出一份 `app.db`，连同 `books/` 目录同步到另一个位置（对象存储或另一块磁盘）。原始 PDF 在书在，页面图片可以重新生成；AI 产物（朗读、动画）重新生成要花钱，值得一起备份。
+- **更新版本**：`git pull && docker-compose up -d --build`。数据库迁移在 api 启动时自动执行。
+- **备份建议**：每天用 SQLite 的在线备份命令导出一份 `app.db`，连同 `books/` 目录同步到另一个位置（对象存储或另一块磁盘）；直接备份整个 `DATA_PATH` 目录也可以。原始 PDF 在书在，页面图片可以重新生成；AI 产物（朗读、动画）重新生成要花钱，值得一起备份。
 
 ## 5. 开发与测试
 
