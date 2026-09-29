@@ -20,8 +20,6 @@ export interface ShelfTheme {
   cover: string;
   /** 封面下方的暖色光斑 */
   lightPool?: boolean;
-  /** 绘本立在木书架上 */
-  plank?: boolean;
   /** 偶尔有萤火虫飞来停在书上（D48） */
   fireflies?: boolean;
 }
@@ -61,7 +59,6 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     caption: "text-[#3D4870]",
     avatar: "bg-white text-[#2E3A63] shadow-sm",
     cover: "ring-1 ring-[rgba(46,58,99,.12)] shadow-[6px_8px_18px_rgba(60,45,20,.28)]",
-    plank: true,
   },
   dusk: {
     id: "dusk",

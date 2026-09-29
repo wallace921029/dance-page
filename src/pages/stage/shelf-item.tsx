@@ -85,12 +85,6 @@ export function ShelfItem({
             className="absolute -bottom-5 left-1/2 h-10 w-[120%] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(255,214,107,.34),transparent_70%)]"
           />
         )}
-        {theme.plank && (
-          <div
-            aria-hidden
-            className="absolute top-full -right-3 -left-3 h-3 bg-linear-to-b from-[#E6BD84] to-[#CF9A5C] shadow-[0_10px_14px_rgba(120,80,30,.22)] sm:-right-5 sm:-left-5"
-          />
-        )}
         <div
           className="relative"
           style={{
@@ -112,16 +106,16 @@ export function ShelfItem({
               alt=""
               loading="lazy"
               className={cn(
-                "size-full rounded-md object-cover transition-transform duration-300 group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 group-focus-visible:outline-3 group-focus-visible:outline-offset-4 group-focus-visible:outline-stage-spot group-active:scale-[.98]",
+                "size-full rounded-md object-cover transition-transform duration-300 group-focus-visible:-translate-y-1.5 group-focus-visible:outline-3 group-focus-visible:outline-offset-4 group-focus-visible:outline-stage-spot group-active:scale-[.98]",
                 theme.cover,
               )}
             />
             {book.cover_video_url && motionEnabled && (
-              // 与封面一起上浮、缩放；视频首尾都是封面原图
+              // 与封面一起缩放（点按回弹）；视频首尾都是封面原图
               <LoopVideo
                 src={book.cover_video_url}
                 className={cn(
-                  "absolute inset-0 size-full rounded-md object-cover group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 group-active:scale-[.98]",
+                  "absolute inset-0 size-full rounded-md object-cover group-focus-visible:-translate-y-1.5 group-active:scale-[.98]",
                   theme.cover,
                 )}
               />
@@ -139,8 +133,8 @@ export function ShelfItem({
       </div>
       <p
         className={cn(
-          "line-clamp-1 shrink-0 text-center text-xs leading-snug sm:line-clamp-2 sm:text-sm",
-          theme.plank ? "mt-5" : "mt-3",
+          // 书名只显示一行，太长时末尾显示省略号（D112）
+          "mt-3 max-w-full shrink-0 truncate text-center text-xs leading-snug sm:text-sm",
           theme.caption,
         )}
       >

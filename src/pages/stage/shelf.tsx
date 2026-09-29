@@ -60,7 +60,6 @@ function useLandscapeRows(
   mainRef: React.RefObject<HTMLElement | null>,
   books: ShelfBook[] | undefined,
   page: number,
-  plank: boolean,
 ) {
   const [layout, setLayout] = useState<{ height: number; rows: number[] } | null>(null);
 
@@ -70,11 +69,10 @@ function useLandscapeRows(
 
     const update = () => {
       const wide = window.matchMedia("(min-width: 640px)").matches;
-      // 与网格列距、木书架内边距及书名最多两行的尺寸一致
-      const columnGap = plank ? 0 : wide ? 40 : 24;
-      const bookInset = plank ? (wide ? 40 : 24) : 0;
-      const coverWidth = Math.max(0, (main.clientWidth - 3 * columnGap) / 4 - bookInset);
-      const titleRoom = (wide ? 40 : 17) + (plank ? 20 : 12);
+      // 与网格列距及书名一行的高度一致
+      const columnGap = wide ? 40 : 24;
+      const coverWidth = Math.max(0, (main.clientWidth - 3 * columnGap) / 4);
+      const titleRoom = (wide ? 20 : 17) + 12;
       const rowGap = wide ? 12 : 8;
       const pageBooks = books.slice((page - 1) * BOOKS_PER_PAGE, page * BOOKS_PER_PAGE);
       const rows = Array.from({ length: Math.ceil(pageBooks.length / 4) }, (_, row) =>
@@ -109,7 +107,7 @@ function useLandscapeRows(
     const observer = new ResizeObserver(update);
     observer.observe(main);
     return () => observer.disconnect();
-  }, [mainRef, books, page, plank]);
+  }, [mainRef, books, page]);
 
   return layout;
 }
@@ -157,7 +155,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
     Boolean(books && books.length > 0 && !error),
   );
   const mainRef = useRef<HTMLElement>(null);
-  const landscapeRows = useLandscapeRows(mainRef, books, page, Boolean(theme.plank));
+  const landscapeRows = useLandscapeRows(mainRef, books, page);
   const landscapeStyle: React.CSSProperties & {
     "--compact-height"?: string;
     "--compact-rows"?: string;
@@ -311,15 +309,13 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
                 }}
                 className={cn(
                   // 横屏按封面比例收紧两排，空间不足时等比缩放；竖屏仍填满剩余空间
-                  "grid min-h-0 flex-1 grid-cols-2 grid-rows-4 gap-y-4 landscape:my-auto landscape:h-[var(--compact-height,100%)] landscape:flex-none landscape:grid-cols-4 landscape:grid-rows-[var(--compact-rows,repeat(2,minmax(0,1fr)))] landscape:gap-y-2 sm:gap-y-6 sm:landscape:gap-y-3 sm:portrait:grid-cols-3 sm:portrait:grid-rows-3",
-                  // 木书架要连成一整条，列之间不留空隙，间距放到每本书内部
-                  theme.plank ? "gap-x-0" : "gap-x-6 sm:gap-x-10",
+                  "grid min-h-0 flex-1 grid-cols-2 grid-rows-4 gap-x-6 gap-y-4 landscape:my-auto landscape:h-[var(--compact-height,100%)] landscape:flex-none landscape:grid-cols-4 landscape:grid-rows-[var(--compact-rows,repeat(2,minmax(0,1fr)))] landscape:gap-y-2 sm:gap-x-10 sm:gap-y-6 sm:landscape:gap-y-3 sm:portrait:grid-cols-3 sm:portrait:grid-rows-3",
                 )}
               >
                 {books
                   .slice((page - 1) * BOOKS_PER_PAGE, page * BOOKS_PER_PAGE)
                   .map((book, index) => (
-                    <li key={book.id} className={cn("min-h-0", theme.plank && "px-3 sm:px-5")}>
+                    <li key={book.id} className="min-h-0">
                       <ShelfItem
                         book={book}
                         theme={theme}
