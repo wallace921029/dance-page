@@ -47,7 +47,7 @@ from app.ai.voices import current_voice, voice_state
 from app.books import storage
 from app.books.service import video_by_cover
 from app.clock import utcnow
-from app.deps import AppSettings, CurrentAdmin, DbSession
+from app.deps import AppSettings, CurrentStaff, DbSession
 from app.models import AiUnit, Book, Character, CharacterVoice, Job
 
 router = APIRouter(tags=["AI 工作台"])
@@ -209,14 +209,14 @@ def _book_ai_out(db: Session, book: Book) -> BookAiOut:
 
 
 @router.get("/admin/books/{book_id}/ai")
-def get_book_ai(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def get_book_ai(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     return _book_ai_out(db, book)
 
 
 @router.patch("/admin/books/{book_id}/ai")
 def update_book_ai(
-    book_id: str, body: BookAiUpdate, _admin: CurrentAdmin, db: DbSession
+    book_id: str, body: BookAiUpdate, _admin: CurrentStaff, db: DbSession
 ) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     if body.story is not None:
@@ -231,7 +231,7 @@ def update_book_ai(
 
 
 @router.post("/admin/books/{book_id}/ai/analyze", status_code=status.HTTP_202_ACCEPTED)
-def analyze_book_ai(book_id: str, _admin: CurrentAdmin, db: DbSession) -> JobEnqueuedOut:
+def analyze_book_ai(book_id: str, _admin: CurrentStaff, db: DbSession) -> JobEnqueuedOut:
     book = _get_book_with_ai(db, book_id)
     if book.processing_status != "ready":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "绘本尚未拆页完成，无法进行故事分析")
@@ -257,7 +257,7 @@ def analyze_book_ai(book_id: str, _admin: CurrentAdmin, db: DbSession) -> JobEnq
 
 
 @router.put("/admin/books/{book_id}/ai/voice-ready")
-def confirm_voice_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def confirm_voice_ready(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     """确认 Voice Ready：读者从此能听到已生成的朗读（D61）。没生成朗读的页面不显示朗读按钮。"""
     book = _get_book_with_ai(db, book_id)
     if not any(u.audio_source_hash is not None and u.audio_enabled for u in book.ai_units):
@@ -269,7 +269,7 @@ def confirm_voice_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> Bo
 
 
 @router.delete("/admin/books/{book_id}/ai/voice-ready")
-def cancel_voice_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def cancel_voice_ready(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     book.voice_ready_at = None
     db.commit()
@@ -284,7 +284,7 @@ def cancel_voice_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> Boo
     status_code=status.HTTP_201_CREATED,
 )
 def create_character(
-    book_id: str, body: CharacterCreate, _admin: CurrentAdmin, db: DbSession
+    book_id: str, body: CharacterCreate, _admin: CurrentStaff, db: DbSession
 ) -> CharacterOut:
     book = _get_book_with_ai(db, book_id)
     sort_order = max((c.sort_order for c in book.characters), default=0) + 1
@@ -306,7 +306,7 @@ def update_character(
     book_id: str,
     character_id: int,
     body: CharacterUpdate,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
 ) -> CharacterOut:
     char = db.scalar(
@@ -331,7 +331,7 @@ def update_character(
 
 @router.delete("/admin/books/{book_id}/ai/characters/{character_id}")
 def delete_character(
-    book_id: str, character_id: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, character_id: int, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> dict[str, bool]:
     char = db.scalar(
         select(Character).where(Character.id == character_id, Character.book_id == book_id)
@@ -369,7 +369,7 @@ def delete_character(
     status_code=status.HTTP_202_ACCEPTED,
 )
 def design_character_voice(
-    book_id: str, character_id: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, character_id: int, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> JobEnqueuedOut:
     """按角色的音色描述，为当前朗读设置设计音色（重新生成会替换原来的音色）。"""
     char = db.scalar(
@@ -402,7 +402,7 @@ def design_character_voice(
 
 @router.get("/admin/books/{book_id}/ai/voices/{voice_id}", response_class=FileResponse)
 def get_voice_preview(
-    book_id: str, voice_id: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, voice_id: int, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ):
     voice = db.scalar(
         select(CharacterVoice)
@@ -425,7 +425,7 @@ def update_spread_mode(
     book_id: str,
     first_page: int,
     body: SpreadModeUpdate,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
     settings: AppSettings,
 ) -> SpreadOut:
@@ -451,7 +451,7 @@ def update_spread_switches(
     book_id: str,
     first_page: int,
     body: SpreadSwitchesUpdate,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
 ) -> SpreadOut:
     """开页的"朗读""动画"开关（D95）：关闭后一键生成跳过、阅读端也不播放，已生成的文件保留。"""
@@ -498,7 +498,7 @@ def _cancel_queued_video(db: Session, unit: AiUnit) -> None:
 
 
 @router.patch("/admin/ai/units/{unit_id}")
-def update_unit(unit_id: str, body: UnitUpdate, _admin: CurrentAdmin, db: DbSession) -> AiUnitOut:
+def update_unit(unit_id: str, body: UnitUpdate, _admin: CurrentStaff, db: DbSession) -> AiUnitOut:
     unit = db.get(AiUnit, unit_id)
     if unit is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "单元不存在")
@@ -518,7 +518,7 @@ def update_unit(unit_id: str, body: UnitUpdate, _admin: CurrentAdmin, db: DbSess
 
 
 @router.post("/admin/ai/units/{unit_id}/draft", status_code=status.HTTP_202_ACCEPTED)
-def draft_unit_ai(unit_id: str, _admin: CurrentAdmin, db: DbSession) -> JobEnqueuedOut:
+def draft_unit_ai(unit_id: str, _admin: CurrentStaff, db: DbSession) -> JobEnqueuedOut:
     unit = db.get(AiUnit, unit_id)
     if unit is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "单元不存在")
@@ -571,7 +571,7 @@ def _enqueue_audio(db: Session, unit: AiUnit) -> Job:
 
 @router.post("/admin/ai/units/{unit_id}/audio", status_code=status.HTTP_202_ACCEPTED)
 def generate_unit_audio(
-    unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    unit_id: str, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> JobEnqueuedOut:
     """生成（或重新生成）该单元的朗读。"""
     unit = db.get(AiUnit, unit_id)
@@ -596,7 +596,7 @@ def generate_unit_audio(
 @router.post("/admin/books/{book_id}/ai/generate-all", status_code=status.HTTP_202_ACCEPTED)
 def generate_all(
     book_id: str,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
     settings: AppSettings,
     type: Literal["audio", "video"] = Query(),
@@ -644,7 +644,7 @@ def _enqueue_audios(
     "/admin/books/{book_id}/ai/spreads/{first_page}/audio", status_code=status.HTTP_202_ACCEPTED
 )
 def generate_spread_audio(
-    book_id: str, first_page: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, first_page: int, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> GenerateAllOut:
     """生成（或重新生成）这个开页里所有单元的朗读。"""
     book = _get_book_with_ai(db, book_id)
@@ -659,7 +659,7 @@ def generate_spread_audio(
 
 
 @router.get("/admin/ai/units/{unit_id}/audio", response_class=FileResponse)
-def get_unit_audio(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings):
+def get_unit_audio(unit_id: str, _admin: CurrentStaff, db: DbSession, settings: AppSettings):
     unit = db.get(AiUnit, unit_id)
     if unit is None or unit.audio_source_hash is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "朗读音频不存在")
@@ -677,7 +677,7 @@ def get_unit_audio(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: 
 @router.post("/admin/books/{book_id}/ai/cover-video", status_code=status.HTTP_202_ACCEPTED)
 def generate_cover_video(
     book_id: str,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
     settings: AppSettings,
     body: VideoGenerate | None = None,
@@ -708,7 +708,7 @@ def generate_cover_video(
 
 @router.get("/admin/books/{book_id}/ai/cover-video", response_class=FileResponse)
 def get_cover_video_preview(
-    book_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ):
     book = db.get(Book, book_id)
     path = storage.ai_cover_video_path(settings, book_id)
@@ -720,7 +720,7 @@ def get_cover_video_preview(
 
 
 @router.put("/admin/books/{book_id}/ai/cover-video/enabled")
-def enable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def enable_cover_video(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     """启用封面动画：读者在书架和阅读页封面上看到它（与 Dance Ready! 相互独立）。"""
     book = _get_book_with_ai(db, book_id)
     if book.cover_video_source_hash is None:
@@ -734,7 +734,7 @@ def enable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> Boo
 
 
 @router.delete("/admin/books/{book_id}/ai/cover-video/enabled")
-def disable_cover_video(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def disable_cover_video(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     book.cover_video_enabled_at = None
     db.commit()
@@ -820,7 +820,7 @@ def _enqueue_videos(
 @router.post("/admin/ai/units/{unit_id}/video", status_code=status.HTTP_202_ACCEPTED)
 def generate_unit_video(
     unit_id: str,
-    _admin: CurrentAdmin,
+    _admin: CurrentStaff,
     db: DbSession,
     settings: AppSettings,
     body: VideoGenerate | None = None,
@@ -848,7 +848,7 @@ def generate_unit_video(
     "/admin/books/{book_id}/ai/spreads/{first_page}/video", status_code=status.HTTP_202_ACCEPTED
 )
 def generate_spread_video(
-    book_id: str, first_page: int, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, first_page: int, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> GenerateAllOut:
     """生成（或重新生成）这个开页里所有单元的动画。"""
     book = _get_book_with_ai(db, book_id)
@@ -861,7 +861,7 @@ def generate_spread_video(
 
 
 @router.get("/admin/ai/units/{unit_id}/video", response_class=FileResponse)
-def get_unit_video(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings):
+def get_unit_video(unit_id: str, _admin: CurrentStaff, db: DbSession, settings: AppSettings):
     unit = db.get(AiUnit, unit_id)
     if unit is None or unit.video_source_hash is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "动画不存在")
@@ -877,7 +877,7 @@ def get_unit_video(unit_id: str, _admin: CurrentAdmin, db: DbSession, settings: 
 
 
 @router.put("/admin/books/{book_id}/ai/dance-ready")
-def confirm_dance_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def confirm_dance_ready(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     """确认 Dance Ready!：读者从此能看到已生成的开页动画（D61）。与 Voice Ready 相互独立（D67）。"""
     book = _get_book_with_ai(db, book_id)
     if not any(
@@ -892,7 +892,7 @@ def confirm_dance_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> Bo
 
 
 @router.delete("/admin/books/{book_id}/ai/dance-ready")
-def cancel_dance_ready(book_id: str, _admin: CurrentAdmin, db: DbSession) -> BookAiOut:
+def cancel_dance_ready(book_id: str, _admin: CurrentStaff, db: DbSession) -> BookAiOut:
     book = _get_book_with_ai(db, book_id)
     book.dance_ready_at = None
     db.commit()

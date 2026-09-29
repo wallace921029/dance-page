@@ -20,6 +20,16 @@ export function useSetReaderDisabled() {
   });
 }
 
+/** 授予 / 取消小小管理员（只有管理员能做，立即生效，D109） */
+export function useSetReaderRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, role }: { id: number; role: Reader["role"] }) =>
+      (await api.patch<Reader>(`/admin/readers/${id}`, { role })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: readersKey }),
+  });
+}
+
 export function useResetReaderPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) =>

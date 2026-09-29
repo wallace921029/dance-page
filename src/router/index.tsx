@@ -1,6 +1,6 @@
 import { createBrowserRouter, redirect } from "react-router";
 import LoginPage from "@/pages/login";
-import { redirectIfLoggedIn, requireAdmin, requireUser } from "@/router/guards";
+import { redirectIfLoggedIn, requireAdmin, requireStaff, requireUser } from "@/router/guards";
 
 export const router = createBrowserRouter([
   {
@@ -40,7 +40,7 @@ export const router = createBrowserRouter([
   // 管理后台单独打包，读者不会加载
   {
     path: "/admin",
-    loader: requireAdmin,
+    loader: requireStaff,
     lazy: () => import("@/pages/admin/layout").then((m) => ({ Component: m.default })),
     HydrateFallback: () => null,
     children: [
@@ -54,8 +54,9 @@ export const router = createBrowserRouter([
         lazy: () => import("@/pages/admin/book-detail").then((m) => ({ Component: m.default })),
       },
       {
-        // 用户管理：邀请码、读者两个标签（子路由）
+        // 用户管理：邀请码、读者两个标签（子路由）。仅管理员，小小管理员没有这个模块（D109）
         path: "users",
+        loader: requireAdmin,
         lazy: () => import("@/pages/admin/users").then((m) => ({ Component: m.default })),
         children: [
           { index: true, loader: () => redirect("/admin/users/invites") },
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       { path: "readers", loader: () => redirect("/admin/users/readers") },
       {
         path: "ai",
+        loader: requireAdmin,
         lazy: () => import("@/pages/admin/ai-settings").then((m) => ({ Component: m.default })),
       },
     ],

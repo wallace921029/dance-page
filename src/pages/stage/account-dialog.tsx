@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useLogout } from "@/api/auth";
+import type { Role } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,9 +13,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { ROLE_LABELS, isStaff } from "@/lib/roles";
 import { DoodleAvatar, DoodleExit, DoodleGear } from "@/pages/stage/doodle-avatar";
 
-export function AccountDialog({ username, isAdmin }: { username: string; isAdmin: boolean }) {
+export function AccountDialog({ username, role }: { username: string; role: Role }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const logout = useLogout();
@@ -42,12 +44,12 @@ export function AccountDialog({ username, isAdmin }: { username: string; isAdmin
             {username}
           </DialogTitle>
           <DialogDescription className="text-xs text-stage-light/70">
-            {isAdmin ? "管理员" : "小读者"}
+            {ROLE_LABELS[role]}
           </DialogDescription>
         </div>
 
         <div className="flex flex-col gap-3">
-          {isAdmin && (
+          {isStaff(role) && (
             <AccountAction
               label="管理后台"
               onClick={() => {

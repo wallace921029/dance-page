@@ -1,6 +1,11 @@
 import { useState } from "react";
-import { KeyRound, Users } from "lucide-react";
-import { useReaders, useResetReaderPassword, useSetReaderDisabled } from "@/api/readers";
+import { KeyRound, ShieldCheck, ShieldOff, Users } from "lucide-react";
+import {
+  useReaders,
+  useResetReaderPassword,
+  useSetReaderDisabled,
+  useSetReaderRole,
+} from "@/api/readers";
 import type { Reader } from "@/api/types";
 import {
   AlertDialog,
@@ -58,7 +63,7 @@ export default function AdminReadersPage() {
 
   return (
     <>
-      <PageHeader description="读者通过邀请码自行注册。停用后立即退出登录且无法再登录；忘记密码时可在这里重置。" />
+      <PageHeader description="读者通过邀请码自行注册。停用后立即退出登录且无法再登录；忘记密码时可在这里重置。可以把信任的读者设为小小管理员，让他们帮忙管理绘本。" />
       {isPending ? (
         <LoadingState />
       ) : error ? (
@@ -82,6 +87,7 @@ export default function AdminReadersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>用户名</TableHead>
+                  <TableHead>角色</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>注册时间</TableHead>
                   <TableHead>最近使用</TableHead>
@@ -92,6 +98,13 @@ export default function AdminReadersPage() {
                 {readers.map((reader, index) => (
                   <AnimatedTableRow key={reader.id} index={index}>
                     <TableCell className="font-medium">{reader.username}</TableCell>
+                    <TableCell>
+                      {reader.role === "sub_admin" ? (
+                        <Badge title="只有绘本模块的权限">小小管理员</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">读者</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {reader.is_disabled ? (
                         <Badge variant="outline">已停用</Badge>
@@ -107,6 +120,7 @@ export default function AdminReadersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <ToggleSubAdminButton reader={reader} />
                         <ResetPasswordButton reader={reader} />
                         <ToggleDisabledButton reader={reader} />
                       </div>
@@ -119,6 +133,65 @@ export default function AdminReadersPage() {
         </Reveal>
       )}
     </>
+  );
+}
+
+/** 授予 / 取消小小管理员（D109）：只有绘本模块的权限，立即生效，需要二次确认 */
+function ToggleSubAdminButton({ reader }: { reader: Reader }) {
+  const setRole = useSetReaderRole();
+  const [open, setOpen] = useState(false);
+  const grant = reader.role !== "sub_admin";
+
+  const apply = () =>
+    setRole.mutate(
+      { id: reader.id, role: grant ? "sub_admin" : "reader" },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          toast.add({
+            title: grant
+              ? `${reader.username} 现在是小小管理员`
+              : `已取消 ${reader.username} 的小小管理员`,
+            type: "success",
+          });
+        },
+        onError: (err) =>
+          toast.add({ title: "操作失败", description: getErrorMessage(err), type: "error" }),
+      },
+    );
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>
+        {grant ? <ShieldCheck /> : <ShieldOff />}
+        {grant ? "设为小小管理员" : "取消小小管理员"}
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {grant
+              ? `把 ${reader.username} 设为小小管理员？`
+              : `取消 ${reader.username} 的小小管理员？`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {grant
+              ? "小小管理员可以进入管理后台的“绘本”模块：上传、编辑、上下架、删除绘本，使用绘本详情页里的 AI 工作台（生成会产生费用）。看不到“用户管理”和“AI 配置”。授权立即生效。"
+              : "取消后他只能作为读者使用书架，不能再进入管理后台。立即生效。"}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <Button
+            variant={grant ? "default" : "destructive"}
+            disabled={setRole.isPending}
+            onClick={apply}
+          >
+            {setRole.isPending && <Spinner />}
+            {grant ? "设为小小管理员" : "取消小小管理员"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

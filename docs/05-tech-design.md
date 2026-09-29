@@ -75,7 +75,7 @@ backend/
 
 ```
 users
-  id, username (唯一，不区分大小写), password_hash, role ('admin' | 'reader'),
+  id, username (唯一，不区分大小写), password_hash, role ('admin' | 'sub_admin' | 'reader')，
   is_disabled, created_at, last_active_at（登录和会话续期时更新，读者列表显示"最近使用"）
 
 sessions
@@ -140,7 +140,7 @@ DATA_DIR/
 - **登录错误提示**：用户名不存在和密码错误统一提示"用户名或密码错误"，且耗时相同，无法借此判断用户名是否存在。
 - **用户名 / 密码规则**：见 [阅读端需求 - 账户](./02-reader.md#账户)（D44）。
 - **邀请码格式**：8 位，去掉易混淆字符（0/O、1/I/L），显示为 `K7M3-Q9TX`。注册链接为 `/register?code=K7M3Q9TX`。注册时忽略大小写、空格和 `-`。有效期 1–365 天，默认 7 天。已使用的邀请码不能作废。
-- **权限**：两个 FastAPI 依赖：`require_user`（任意已登录、未禁用的用户，管理员也可以用阅读端预览）和 `require_admin`。
+- **权限**：三个 FastAPI 依赖：`require_user`（任意已登录、未禁用的用户，管理员也可以用阅读端预览）、`require_staff`（管理员或小小管理员：绘本模块，即 `/admin/books/**` 和绘本 AI 工作台 `/admin/ai/units/**`）和 `require_admin`（仅管理员：邀请码、读者、AI 配置）。角色每次请求都从数据库读取，授予 / 取消小小管理员立即生效（D109）。
 - **CSRF**：`SameSite=Lax` Cookie，加上非上传接口只接受 JSON 请求体，足以覆盖本项目场景。
 
 ### 2.6 API 概览
@@ -171,7 +171,7 @@ DATA_DIR/
 
 图片接口先校验登录，再由 FastAPI 返回文件，并带长期缓存头（`Cache-Control: private`）。图片地址带版本参数，更换封面或重新渲染后地址变化，缓存自动失效。
 
-**管理端**（`require_admin`）
+**管理端**（`require_admin` 仅管理员；绘本相关接口是 `require_staff`，见上）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -183,8 +183,9 @@ DATA_DIR/
 | POST | `/api/admin/invites` | 生成邀请码（可指定有效天数，默认 7） |
 | GET | `/api/admin/invites` | 邀请码列表 |
 | POST | `/api/admin/invites/{id}/revoke` | 作废邀请码 |
-| GET | `/api/admin/readers` | 读者列表 |
-| PATCH | `/api/admin/readers/{id}` | 禁用 / 启用 |
+| DELETE | `/api/admin/invites/{id}` | 删除邀请码：没被用过的（未使用、已过期、已作废）可以删，已使用的返回 409（D108） |
+| GET | `/api/admin/readers` | 读者列表（含小小管理员，带 `role`） |
+| PATCH | `/api/admin/readers/{id}` | 禁用 / 启用（`is_disabled`）、授予 / 取消小小管理员（`role`: `sub_admin` / `reader`，D109），字段都可选，至少给一个 |
 | POST | `/api/admin/readers/{id}/reset-password` | 管理员设置新密码 |
 
 ### 2.7 PDF 上传与拆页流程

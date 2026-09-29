@@ -18,6 +18,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
+import { isStaff } from "@/lib/roles";
 import { StageBrand, StageRoundButton } from "@/pages/stage/common";
 import { DoodleArrow } from "@/pages/stage/doodle-arrow";
 import { AccountDialog } from "@/pages/stage/account-dialog";
@@ -265,7 +266,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
             <MotionButton shelfMotion={shelfMotion} />
             <FavoritesButton favoritesMode={favoritesMode} />
             {me && (
-              <AccountDialog username={me.username} isAdmin={me.role === "admin"} />
+              <AccountDialog username={me.username} role={me.role} />
             )}
           </div>
         </header>
@@ -290,7 +291,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
               favoritesMode={favoritesMode}
               query={query}
               hasShelfBooks={(shelfBooks?.length ?? 0) > 0}
-              isAdmin={me?.role === "admin"}
+              isAdmin={isStaff(me?.role)}
               onClearQuery={() => searchRef.current?.clear()}
             />
           ) : (

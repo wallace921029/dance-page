@@ -8,7 +8,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.clock import utcnow
 from app.db import Base, UTCDateTime
 
-Role = Literal["admin", "reader"]
+# admin：.env 里的初始管理员，拥有全部权限；sub_admin：小小管理员，由管理员从读者中授予，
+# 只有"绘本"模块的权限（D109）；reader：读者
+Role = Literal["admin", "sub_admin", "reader"]
+STAFF_ROLES = ("admin", "sub_admin")
 
 
 class User(Base):

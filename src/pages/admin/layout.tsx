@@ -6,6 +6,7 @@ import { cn } from "cn";
 import "@fontsource/zcool-xiaowei";
 import { meQuery, useLogout } from "@/api/auth";
 import { APP_NAME } from "@/lib/app-info";
+import { ROLE_LABELS, isFullAdmin } from "@/lib/roles";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,10 +25,11 @@ import {
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 
+// adminOnly：只有管理员能用；小小管理员只有"绘本"模块（D109）
 const NAV_ITEMS = [
-  { to: "/admin/books", label: "绘本", icon: BookOpen },
-  { to: "/admin/users", label: "用户管理", icon: Users },
-  { to: "/admin/ai", label: "AI 配置", icon: Sparkles },
+  { to: "/admin/books", label: "绘本", icon: BookOpen, adminOnly: false },
+  { to: "/admin/users", label: "用户管理", icon: Users, adminOnly: true },
+  { to: "/admin/ai", label: "AI 配置", icon: Sparkles, adminOnly: true },
 ];
 
 export default function AdminLayout() {
@@ -57,9 +59,11 @@ export default function AdminLayout() {
           </Link>
           <NavigationMenu>
             <NavigationMenuList>
-              {NAV_ITEMS.map((item) => (
-                <NavItem key={item.to} {...item} />
-              ))}
+              {NAV_ITEMS.filter((item) => !item.adminOnly || isFullAdmin(me?.role)).map(
+                ({ adminOnly: _adminOnly, ...item }) => (
+                  <NavItem key={item.to} {...item} />
+                ),
+              )}
             </NavigationMenuList>
           </NavigationMenu>
           {me && (
@@ -86,7 +90,14 @@ export default function AdminLayout() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-40">
                   <DropdownMenuGroup>
-                    <DropdownMenuLabel>{me.username}</DropdownMenuLabel>
+                    <DropdownMenuLabel>
+                      {me.username}
+                      {me.role === "sub_admin" && (
+                        <span className="ml-1.5 font-normal text-muted-foreground">
+                          {ROLE_LABELS.sub_admin}
+                        </span>
+                      )}
+                    </DropdownMenuLabel>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -124,7 +135,7 @@ export default function AdminLayout() {
   );
 }
 
-function NavItem({ to, label, icon: Icon }: (typeof NAV_ITEMS)[number]) {
+function NavItem({ to, label, icon: Icon }: Omit<(typeof NAV_ITEMS)[number], "adminOnly">) {
   // 绘本详情页（/admin/books/:id）也算在"绘本"下
   const active = useMatch({ path: to, end: false }) !== null;
   return (

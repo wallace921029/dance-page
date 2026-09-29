@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
+import { isStaff } from "@/lib/roles";
 import { StageAuthLayout, stageSubmitButtonClass } from "@/pages/stage/common";
 
 /** 只允许跳回站内路径，防止 ?next= 被用来跳到外部网站 */
@@ -31,7 +32,7 @@ export default function LoginPage() {
           const next = safeNext(searchParams.get("next"));
           const home = user.role === "admin" ? "/admin/books" : "/";
           // 读者不能进 /admin，next 指向那里时回到书架
-          navigate(next && (user.role === "admin" || !next.startsWith("/admin")) ? next : home, {
+          navigate(next && (isStaff(user.role) || !next.startsWith("/admin")) ? next : home, {
             replace: true,
           });
         },

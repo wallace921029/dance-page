@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth.sessions import SESSION_COOKIE, find_session, renew_if_due, set_session_cookie
 from app.config import Settings
 from app.db import get_db
-from app.models import User
+from app.models import STAFF_ROLES, User
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -46,5 +46,15 @@ def require_admin(user: Annotated[User, Depends(require_user)]) -> User:
     return user
 
 
+def require_staff(user: Annotated[User, Depends(require_user)]) -> User:
+    """管理员或小小管理员：绘本模块（上传、编辑、AI 工作台）的权限（D109）。"""
+    if user.role not in STAFF_ROLES:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "需要管理员权限")
+    return user
+
+
 CurrentUser = Annotated[User, Depends(require_user)]
+# 仅管理员：用户管理、AI 配置
 CurrentAdmin = Annotated[User, Depends(require_admin)]
+# 管理员或小小管理员：绘本模块
+CurrentStaff = Annotated[User, Depends(require_staff)]

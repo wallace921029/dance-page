@@ -10,7 +10,7 @@ from app.books import storage
 from app.books.schemas import ReaderBookOut, ShelfBookOut, reader_has_audio, reader_has_video
 from app.books.service import reader_cover_video_url
 from app.deps import AppSettings, CurrentUser, DbSession
-from app.models import AiUnit, Book, Favorite, Page, User
+from app.models import STAFF_ROLES, AiUnit, Book, Favorite, Page, User
 
 router = APIRouter(prefix="/books", tags=["阅读端"])
 
@@ -19,9 +19,9 @@ IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 
 def _readable_book(db: Session, book_id: str, user: User, *, with_pages: bool = False) -> Book:
-    """读者只能看到已上架且处理完成的绘本；管理员可以预览下架的绘本。"""
+    """读者只能看到已上架且处理完成的绘本；管理员和小小管理员可以预览下架的绘本。"""
     query = select(Book).where(Book.id == book_id, Book.processing_status == "ready")
-    if user.role != "admin":
+    if user.role not in STAFF_ROLES:
         query = query.where(Book.visibility == "listed")
     if with_pages:
         query = query.options(selectinload(Book.pages), selectinload(Book.ai_units))

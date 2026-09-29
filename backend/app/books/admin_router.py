@@ -8,7 +8,7 @@ from app.books import storage
 from app.books.render import make_cover
 from app.books.schemas import AdminBookDetailOut, AdminBookOut, BookUpdate
 from app.books.service import enqueue_render, title_from_filename
-from app.deps import AppSettings, CurrentAdmin, DbSession
+from app.deps import AppSettings, CurrentStaff, DbSession
 from app.models import Book
 
 router = APIRouter(prefix="/admin/books", tags=["绘本管理"])
@@ -29,7 +29,7 @@ def _get_book(db: Session, book_id: str) -> Book:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def upload_book(
-    file: UploadFile, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    file: UploadFile, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> AdminBookOut:
     filename = file.filename or "未命名.pdf"
     book = Book(title=title_from_filename(filename), original_filename=filename, file_size=0)
@@ -66,7 +66,7 @@ def upload_book(
 
 
 @router.get("")
-def list_books(_admin: CurrentAdmin, db: DbSession) -> list[AdminBookOut]:
+def list_books(_admin: CurrentStaff, db: DbSession) -> list[AdminBookOut]:
     books = db.scalars(
         select(Book).options(selectinload(Book.jobs)).order_by(Book.created_at.desc())
     )
@@ -74,13 +74,13 @@ def list_books(_admin: CurrentAdmin, db: DbSession) -> list[AdminBookOut]:
 
 
 @router.get("/{book_id}")
-def get_book(book_id: str, _admin: CurrentAdmin, db: DbSession) -> AdminBookDetailOut:
+def get_book(book_id: str, _admin: CurrentStaff, db: DbSession) -> AdminBookDetailOut:
     return AdminBookDetailOut.of(_get_book(db, book_id))
 
 
 @router.patch("/{book_id}")
 def update_book(
-    book_id: str, body: BookUpdate, _admin: CurrentAdmin, db: DbSession, settings: AppSettings
+    book_id: str, body: BookUpdate, _admin: CurrentStaff, db: DbSession, settings: AppSettings
 ) -> AdminBookDetailOut:
     book = _get_book(db, book_id)
     fields = body.model_fields_set
@@ -111,7 +111,7 @@ def update_book(
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_book(book_id: str, _admin: CurrentAdmin, db: DbSession, settings: AppSettings) -> None:
+def delete_book(book_id: str, _admin: CurrentStaff, db: DbSession, settings: AppSettings) -> None:
     book = _get_book(db, book_id)
     db.delete(book)
     db.commit()

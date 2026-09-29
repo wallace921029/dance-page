@@ -1,6 +1,6 @@
 // 与后端接口（backend/app/*/schemas.py）对应的类型
 
-export type Role = "admin" | "reader";
+export type Role = "admin" | "sub_admin" | "reader";
 
 export interface User {
   id: number;
@@ -72,6 +72,8 @@ export interface Invite {
 export interface Reader {
   id: number;
   username: string;
+  /** reader：读者；sub_admin：小小管理员，只有绘本模块的权限（D109） */
+  role: Extract<Role, "reader" | "sub_admin">;
   is_disabled: boolean;
   created_at: string;
   last_active_at: string | null;
