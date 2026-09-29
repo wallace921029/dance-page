@@ -67,7 +67,7 @@ export function StageAuthLayout({
 }) {
   return (
     <div
-      // fixed + 整屏高度（见 index.css 的 --app-screen-height）：iPad 主屏幕应用里 svh 比屏幕矮一截，底部会露出白条；
+      // fixed + 整屏高度（见 index.css 的 --app-screen-height），不撑高文档；
       // 卡片用 m-auto 居中，内容比屏幕高时（横屏软键盘弹出）可以在容器里滚动
       className="dark fixed top-0 left-0 flex h-(--app-screen-height) w-full overflow-y-auto p-6 font-stage text-foreground"
       style={{ background: SHELF_BACKGROUND }}

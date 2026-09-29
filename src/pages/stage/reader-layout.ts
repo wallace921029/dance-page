@@ -15,7 +15,7 @@ export const BOOK_PADDING_CSS = [
   `calc(${BASE_PADDING.x}px + env(safe-area-inset-left))`,
 ].join(" ");
 
-/** 书架、阅读页整屏的高度（像素）：与 CSS 里的 --app-screen-height 一致，主屏幕应用里比 innerHeight 高一截 */
+/** 书架、阅读页整屏的高度（像素）：与 CSS 里的 --app-screen-height 一致 */
 export function appScreenHeight() {
   const probe = document.createElement("div");
   probe.style.cssText =

@@ -8,12 +8,13 @@
     <meta name="application-name" content="萤火" />
     <meta name="theme-color" content="#141833" />
     <meta name="format-detection" content="telephone=no" />
-    <!-- 添加到主屏幕（D59）：从主屏幕打开时全屏显示，页面延伸到状态栏下面 -->
+    <!-- 添加到主屏幕（D59）：从主屏幕打开时全屏显示，没有浏览器地址栏。状态栏用不透明的黑色（D124）：
+         页面排在状态栏下面，不再延伸到它下面——iOS 26 的 black-translucent 会让网页视图矮一截，底部露出白条 -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="萤火" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   </head>

@@ -183,18 +183,9 @@
     }
 }
 
-/* 书架、阅读页的"整屏高度"（D122）。iOS 26 的主屏幕应用（black-translucent + viewport-fit=cover）里，
-   100% / 100vh / 100dvh / fixed 的 bottom:0 都比真实屏幕矮一截（WebKit bug 301108），底部露出白色 body；
-   只有 100lvh 是整屏。主屏幕应用里用 lvh，普通浏览器里仍用 dvh（地址栏会伸缩） */
+/* 书架、阅读页、登录页的"整屏高度"（D122–D124）：用 dvh。这些页面是 fixed 的整屏容器，不撑高文档，
+   文档不可滚动，就不会被系统滚上去一截。iOS 26 主屏幕应用里状态栏用 black（不是 black-translucent），
+   网页视图排在状态栏下面，dvh 就是实际可用的高度 */
 :root {
   --app-screen-height: 100dvh;
-}
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  :root {
-    --app-screen-height: 100lvh;
-  }
-}
-/* 较旧的 iOS 只提供 navigator.standalone，由 main.tsx 加上这个类 */
-:root.standalone {
-  --app-screen-height: 100lvh;
 }

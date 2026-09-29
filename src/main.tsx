@@ -8,9 +8,6 @@ import { installViewportDebug } from "@/lib/viewport-debug";
 import { router } from "./router";
 import "./index.css";
 
-if ((navigator as Navigator & { standalone?: boolean }).standalone === true) {
-  document.documentElement.classList.add("standalone");
-}
 installViewportDebug();
 
 createRoot(document.getElementById("root")!).render(

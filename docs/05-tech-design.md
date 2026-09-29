@@ -297,7 +297,7 @@ Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui（`base-nova` 风格，�
 
 - `public/manifest.webmanifest`（`display: standalone`、主题色 `#141833`）和 `index.html` 里 iOS 所需的 `apple-mobile-web-app-*` meta、`apple-touch-icon`（D59）。
 - 图标在 `public/icons/`，由 `uv run scripts/make-icons.py` 用本机 Chrome 把 SVG 渲染成 PNG；改图案时改脚本里的 SVG 再重新生成。
-- iOS 状态栏为 `black-translucent`：页面延伸到状态栏下面。书架、阅读页（按钮、页码、书本留白）和管理后台顶栏都用 `env(safe-area-inset-*)` 让出安全区；阅读页的书本留白定义在 `reader-layout.ts`（`BOOK_PADDING_CSS`）。
+- iOS 状态栏为 `black`（D124）：不透明的黑色状态栏，页面排在它下面（原来的 `black-translucent` 会让 iOS 26 的网页视图矮一截，底部露白条，见 D123）。书架、阅读页（按钮、页码、书本留白）和管理后台顶栏仍用 `env(safe-area-inset-*)` 让出安全区（此时顶部为 0，底部横条仍有）；阅读页的书本留白定义在 `reader-layout.ts`（`BOOK_PADDING_CSS`）。
 - 从主屏幕打开时隐藏全屏按钮（`display-mode: standalone` 或 iOS 的 `navigator.standalone`）。
 - iOS 上主屏幕 App 与 Safari 的 Cookie 不共享，第一次从主屏幕打开需要重新登录一次。
 - 不做离线缓存（不引入 Service Worker）。

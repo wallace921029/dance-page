@@ -219,7 +219,7 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
     <div
       className={cn(
         // 书架固定一屏高，不出现滚动条：书格按剩余空间缩放
-        // fixed + 整屏高度：不撑高文档（文档不可滚动，就不会被顶上去），又能铺到屏幕最底（见 index.css 的 --app-screen-height）
+        // fixed + 整屏高度：不撑高文档，文档不可滚动，就不会被系统滚上去一截（见 index.css 的 --app-screen-height）
         "fixed top-0 left-0 isolate flex h-(--app-screen-height) w-full flex-col overflow-hidden font-stage",
         // 从主屏幕打开时让出状态栏和刘海（底部由 main 和翻页按钮各自让出）
         "pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
