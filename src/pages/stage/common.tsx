@@ -67,10 +67,12 @@ export function StageAuthLayout({
 }) {
   return (
     <div
-      className="dark flex min-h-svh items-center justify-center p-6 font-stage text-foreground"
+      // fixed + 整屏高度（见 index.css 的 --app-screen-height）：iPad 主屏幕应用里 svh 比屏幕矮一截，底部会露出白条；
+      // 卡片用 m-auto 居中，内容比屏幕高时（横屏软键盘弹出）可以在容器里滚动
+      className="dark fixed top-0 left-0 flex h-(--app-screen-height) w-full overflow-y-auto p-6 font-stage text-foreground"
       style={{ background: SHELF_BACKGROUND }}
     >
-      <Card className="w-full max-w-sm gap-6 bg-black/25 py-8 shadow-[0_0_60px_rgba(255,214,107,0.12)] ring-stage-light/20 backdrop-blur">
+      <Card className="m-auto w-full max-w-sm gap-6 bg-black/25 py-8 shadow-[0_0_60px_rgba(255,214,107,0.12)] ring-stage-light/20 backdrop-blur">
         <CardHeader className="px-8 text-center">
           <CardTitle className="text-4xl text-stage-light">
             <StageBrand />
