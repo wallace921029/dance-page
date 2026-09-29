@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useLogin } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -77,7 +77,17 @@ export default function LoginPage() {
               登录
             </Button>
             <FieldDescription className="text-center">
-              还没有账号？请向管理员要一个邀请码。
+              有邀请码？
+              <Button
+                variant="link"
+                nativeButton={false}
+                render={<Link to="/register" />}
+                className="h-auto p-0 text-stage-light"
+              >
+                去注册
+              </Button>
+              <br />
+              还没有邀请码？请向管理员要一个。
             </FieldDescription>
           </Field>
         </FieldGroup>

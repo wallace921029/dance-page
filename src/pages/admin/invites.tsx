@@ -69,14 +69,14 @@ async function copyRegisterLink(invite: Invite) {
 
 export default function AdminInvitesPage() {
   const { data: invites, isPending, error } = useInvites();
-  useDocumentTitle("邀请码");
+  useDocumentTitle("用户管理 · 邀请码");
   const create = useCreateInvite();
   const revoke = useRevokeInvite();
   const [validDays, setValidDays] = useState(7);
 
   return (
     <>
-      <PageHeader title="邀请码" description="一个邀请码只能注册一个读者，过期或作废后不能再使用。">
+      <PageHeader description="一个邀请码只能注册一个读者，过期或作废后不能再使用。">
         <Select
           items={VALID_DAYS_ITEMS}
           value={validDays}

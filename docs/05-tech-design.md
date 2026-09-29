@@ -223,7 +223,7 @@ DATA_DIR/
 | `/` | 书架（平板横屏 3 列，竖屏和手机 2 列，大屏 4 列） | 小剧场 |
 | `/books/:id` | 阅读页 | 小剧场 |
 | `/admin/books`、`/admin/books/:id` | 绘本列表、绘本详情与编辑 | shadcn/ui 工具风 |
-| `/admin/invites`、`/admin/readers` | 邀请码、读者管理 | shadcn/ui 工具风 |
+| `/admin/users`（`/admin/users/invites`、`/admin/users/readers`） | 用户管理：邀请码、读者两个标签（D107）；旧地址 `/admin/invites`、`/admin/readers` 会跳转过来 | shadcn/ui 工具风 |
 
 - **路由守卫**：进入页面前请求 `/api/auth/me`，未登录跳转登录页，读者访问 `/admin` 跳回书架。
 - **数据请求**：继续使用现有的 axios 实例，新增 `@tanstack/react-query` 管理缓存、加载状态和进度轮询。

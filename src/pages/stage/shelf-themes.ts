@@ -10,8 +10,6 @@ export interface ShelfTheme {
   dark: boolean;
   /** CSS background-image（多层渐变），画在固定铺满屏幕的背景层上 */
   background: string;
-  /** 主题菜单里的小色块 */
-  swatch: string;
   /** 品牌名、标题等主要文字 */
   text: string;
   /** 书名等次要文字 */
@@ -47,7 +45,6 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     name: "萤火夜空",
     dark: true,
     background: `${STARS}, radial-gradient(ellipse 70% 55% at 50% 0%, rgba(255,214,140,.16), transparent 70%), linear-gradient(#1A1F4D, #262C63 62%, #30377A)`,
-    swatch: "linear-gradient(135deg, #1A1F4D, #30377A)",
     text: "text-stage-light",
     caption: "text-stage-light/85",
     avatar: "bg-white/12 text-stage-light",
@@ -60,7 +57,6 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     name: "晴天书架",
     dark: false,
     background: "linear-gradient(#CBE6F2, #E4F2F3 55%, #EEF6EE)",
-    swatch: "linear-gradient(135deg, #CBE6F2, #EEF6EE)",
     text: "text-[#2E3A63]",
     caption: "text-[#3D4870]",
     avatar: "bg-white text-[#2E3A63] shadow-sm",
@@ -72,7 +68,6 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     name: "黄昏萤火",
     dark: true,
     background: "linear-gradient(#F4B997 0%, #D7A2B2 30%, #9185BF 58%, #4A4A8C 82%, #353873)",
-    swatch: "linear-gradient(135deg, #F4B997, #9185BF 55%, #353873)",
     text: "text-[#FFF2D6]",
     caption: "text-[#FFF2D6] [text-shadow:0_1px_4px_rgba(40,30,70,.55)]",
     avatar: "bg-white/20 text-[#FFF2D6]",
@@ -84,7 +79,6 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
     name: "纸剪花园",
     dark: false,
     background: "linear-gradient(#E3EFEA, #EEF5EC 60%)",
-    swatch: "linear-gradient(135deg, #E3EFEA, #A5CBA9)",
     text: "text-[#35574A]",
     caption: "text-[#2E4E41]",
     avatar: "bg-white text-[#35574A] shadow-sm",
@@ -93,6 +87,11 @@ export const SHELF_THEMES: Record<ShelfThemeId, ShelfTheme> = {
 };
 
 export const SHELF_THEME_ORDER: ShelfThemeId[] = ["night", "sunny", "dusk", "garden"];
+
+/** 点一下切换按钮后的下一套主题：四套轮流，最后一套之后回到第一套（D104） */
+export function nextShelfTheme(id: ShelfThemeId): ShelfThemeId {
+  return SHELF_THEME_ORDER[(SHELF_THEME_ORDER.indexOf(id) + 1) % SHELF_THEME_ORDER.length];
+}
 const DEFAULT_THEME: ShelfThemeId = "night";
 const STORAGE_KEY = "firefly.shelf-theme";
 

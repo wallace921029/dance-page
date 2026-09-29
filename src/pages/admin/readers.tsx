@@ -54,14 +54,11 @@ const PASSWORD_MIN_LENGTH = 6;
 
 export default function AdminReadersPage() {
   const { data: readers, isPending, error } = useReaders();
-  useDocumentTitle("读者");
+  useDocumentTitle("用户管理 · 读者");
 
   return (
     <>
-      <PageHeader
-        title="读者"
-        description="读者通过邀请码自行注册。停用后立即退出登录且无法再登录；忘记密码时可在这里重置。"
-      />
+      <PageHeader description="读者通过邀请码自行注册。停用后立即退出登录且无法再登录；忘记密码时可在这里重置。" />
       {isPending ? (
         <LoadingState />
       ) : error ? (
@@ -74,7 +71,7 @@ export default function AdminReadersPage() {
                 <Users />
               </EmptyMedia>
               <EmptyTitle>还没有读者</EmptyTitle>
-              <EmptyDescription>在"邀请码"页面生成邀请码，把注册链接发给读者。</EmptyDescription>
+              <EmptyDescription>在"邀请码"标签里生成邀请码，把注册链接发给读者。</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </Reveal>

@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation, useMatch, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, LogOut, Sparkles, Ticket, Users } from "lucide-react";
+import { BookOpen, Library, LogOut, Sparkles, Users } from "lucide-react";
 import { MotionConfig, motion } from "motion/react";
+import { cn } from "cn";
+import "@fontsource/zcool-xiaowei";
 import { meQuery, useLogout } from "@/api/auth";
 import { APP_NAME } from "@/lib/app-info";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,8 +26,7 @@ import {
 
 const NAV_ITEMS = [
   { to: "/admin/books", label: "绘本", icon: BookOpen },
-  { to: "/admin/invites", label: "邀请码", icon: Ticket },
-  { to: "/admin/readers", label: "读者", icon: Users },
+  { to: "/admin/users", label: "用户管理", icon: Users },
   { to: "/admin/ai", label: "AI 配置", icon: Sparkles },
 ];
 
@@ -39,7 +40,21 @@ export default function AdminLayout() {
     <div className="min-h-svh bg-muted/40">
       <header className="sticky top-0 z-20 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-          <span className="font-semibold">{APP_NAME} 管理后台</span>
+          <Link
+            to="/admin/books"
+            aria-label={`${APP_NAME} 管理后台`}
+            className="flex items-center gap-2.5 rounded-xl bg-stage-night py-1 pr-3.5 pl-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {/* 网站 logo：萤火虫照亮打开的书（同 favicon）。字标与读者首页一致（站酷小薇 + 舞台金），
+                浅色顶栏上金色看不清，所以整体放在夜幕色的胶囊里；admin 小而淡，只是个提示 */}
+            <img src="/favicon.svg" alt="" className="size-8 rounded-lg" />
+            <span className="font-stage-title text-2xl leading-none tracking-[0.2em] text-stage-light">
+              {APP_NAME}
+            </span>
+            <span className="self-end pb-1 text-[10px] leading-none tracking-[0.25em] text-stage-light/45 uppercase">
+              admin
+            </span>
+          </Link>
           <NavigationMenu>
             <NavigationMenuList>
               {NAV_ITEMS.map((item) => (
@@ -48,7 +63,18 @@ export default function AdminLayout() {
             </NavigationMenuList>
           </NavigationMenu>
           {me && (
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                nativeButton={false}
+                render={<Link to="/" />}
+                aria-label="打开读者首页"
+                title="打开读者首页"
+                className="text-muted-foreground"
+              >
+                <Library />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   aria-label="账户"
@@ -84,7 +110,8 @@ export default function AdminLayout() {
       <MotionConfig reducedMotion="user">
         {/* 切换页面时内容淡入；只看路径，同一页里翻页、筛选不重播 */}
         <motion.main
-          key={pathname}
+          // 用户管理里切换标签时只换标签下面的内容，标题和标签不跟着重新淡入
+          key={pathname.startsWith("/admin/users") ? "/admin/users" : pathname}
           className="mx-auto max-w-6xl px-4 py-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -120,15 +147,18 @@ export function PageHeader({
   description,
   children,
 }: {
-  title: React.ReactNode;
+  /** 不给标题时只显示说明和右侧的操作按钮（用在带标签的页面里） */
+  title?: React.ReactNode;
   description?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        {title && <h1 className="text-xl font-semibold">{title}</h1>}
+        {description && (
+          <p className={cn("text-sm text-muted-foreground", title && "mt-1")}>{description}</p>
+        )}
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}
     </div>

@@ -54,13 +54,24 @@ export const router = createBrowserRouter([
         lazy: () => import("@/pages/admin/book-detail").then((m) => ({ Component: m.default })),
       },
       {
-        path: "invites",
-        lazy: () => import("@/pages/admin/invites").then((m) => ({ Component: m.default })),
+        // 用户管理：邀请码、读者两个标签（子路由）
+        path: "users",
+        lazy: () => import("@/pages/admin/users").then((m) => ({ Component: m.default })),
+        children: [
+          { index: true, loader: () => redirect("/admin/users/invites") },
+          {
+            path: "invites",
+            lazy: () => import("@/pages/admin/invites").then((m) => ({ Component: m.default })),
+          },
+          {
+            path: "readers",
+            lazy: () => import("@/pages/admin/readers").then((m) => ({ Component: m.default })),
+          },
+        ],
       },
-      {
-        path: "readers",
-        lazy: () => import("@/pages/admin/readers").then((m) => ({ Component: m.default })),
-      },
+      // 旧地址：邀请码、读者原来是两个独立页面
+      { path: "invites", loader: () => redirect("/admin/users/invites") },
+      { path: "readers", loader: () => redirect("/admin/users/readers") },
       {
         path: "ai",
         lazy: () => import("@/pages/admin/ai-settings").then((m) => ({ Component: m.default })),

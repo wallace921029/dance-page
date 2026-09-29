@@ -1,6 +1,6 @@
 # 项目进度与交接
 
-> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D102**（下一个 **D103**）
+> 最后更新：2026-09-29 · 工作分支 `main` · 最后一个决策编号 **D107**（下一个 **D108**）
 >
 > **给接手的 Claude / 开发者**：这是继续工作的入口。用户说"继续我们的任务"时，按顺序读：本文件 → `CLAUDE.md` → 与当前任务相关的 `docs/0x-*.md`，然后按"下次开始时"一节执行。每次工作结束前更新本文件（当前位置、断点、下次开始时、工作记录）。
 
@@ -170,7 +170,7 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 - **前端**（`src/`，Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui on Base UI + react-query + react-router 8 + `motion`）：
   - 阅读端（小剧场风格，`src/pages/stage/`）：登录 `/login`、注册 `/register?code=`、书架 `/`、我的收藏 `/favorites`、阅读页 `/books/:id`。主题色和字体在 `src/index.css` 的 `@theme`；书架主题 `shelf-themes.ts`、背景装饰 `shelf-backdrop.tsx`、动效 `shelf-motion.ts`、翻开过渡 `book-opening.ts`、阅读排版 `reader-layout.ts`、翻页 `flip-book.tsx`。
   - 朗读与动画：`story-audio.ts`（Web Audio 单例播放器）、`use-read-aloud.ts`（自动朗读逻辑）、`read-aloud.tsx`（小喇叭、自动朗读开关）、`loop-video.tsx`（叠在静态画面上的循环视频：封面动画、开页动画共用）、`page-videos.tsx`（阅读页的开页动画）、`dance-ready-sign.tsx`（书架"Dance Ready!"招牌）；手绘图标 `doodle-*.tsx`（爱心、翻页箭头、小喇叭、音符）。
-  - 管理后台（`src/pages/admin/`）：`/admin/books`、`/admin/books/:id`（AI 工作台 `ai-workbench.tsx`：流程说明 → 故事与角色 → 封面动画 → 生成进度（朗读、动画各一行）→ 开页列表）、`/admin/invites`、`/admin/readers`、`/admin/ai`；进场动画用 `motion.tsx`。
+  - 管理后台（`src/pages/admin/`）：`/admin/books`、`/admin/books/:id`（AI 工作台 `ai-workbench.tsx`：流程说明 → 故事与角色 → 封面动画 → 生成进度（朗读、动画各一行）→ 开页列表）、`/admin/users`（邀请码、读者两个标签，D107）、`/admin/ai`；进场动画用 `motion.tsx`。
   - 数据请求：`src/api/*.ts`（react-query hooks，类型 `src/api/types.ts`，AI 相关在 `src/api/ai.ts`）；路由守卫 `src/router/guards.ts`；会话过期跳回登录页（`src/lib/query-client.ts`）。
   - 添加到主屏幕：`public/manifest.webmanifest`、`public/icons/`（由 `uv run scripts/make-icons.py` 生成）。
 - **后端**（`backend/app/`，FastAPI + SQLAlchemy 2 + SQLite + Alembic，uv 管理）：账户 / 会话（`auth/`）、邀请码（`invites/`）、读者（`readers/`）、绘本与收藏（`books/`，含读者的朗读 / 封面动画文件接口）、Worker（`worker/runner.py`：拆页、分析、草稿、音色、朗读、封面视频、开页视频；视频任务的 `waiting` 调度）。
@@ -239,3 +239,8 @@ cd .. && npm run build && npm run lint # 构建通过；lint 只有 shadcn 组�
 | 2026-09-29 | 修复火山 Seedance 2.0 提交 400（D100）：时长按型号内置（2.0 为 4–15 秒）、型号名前缀匹配、已保存的不合法设置生成时改用默认值；后台"AI 配置"页同样按前缀取可选项；158 个后端测试通过 |
 | 2026-09-29 | 封面动画也能临时选时长和清晰度（D101）：新增迁移 `a7c2e9d51b34`（`books.cover_video_duration_s`，**用户的开发服务器会在重启 API 时自动执行**）；`POST …/cover-video` 接受 `duration` / `resolution`，校验逻辑与单元共用（`_video_overrides`）；"需要重新生成"按生成时的参数比较；前端新增 `video-options.tsx`（"生成选项"小弹窗），封面卡片和动画单元共用，替换了单元里原来只能换清晰度的下拉菜单；隔离环境浏览器实测 wan2.2（时长灰掉）和 wan2.6（可选时长）两种模型，请求体带的就是所选值；160 个后端测试通过 |
 | 2026-09-29 | 视频清晰度默认改为 480（D102）：`catalog.py` 里各模型的默认值取模型支持的最低一档；已保存的设置不变；160 个后端测试通过 |
+| 2026-09-29 | 书架"书本动效"开关改为收藏爱心左边的手绘小星星按钮（D103）：新增 `doodle-sparkle.tsx` 和 `twinkle` 动画，从头像菜单去掉原勾选项；登录页加"有邀请码？去注册"链接；隔离环境浏览器实测开 / 关、刷新后保持、收藏页也有、系统减少动态效果时不能点、手机宽度不溢出 |
+| 2026-09-29 | 书架主题切换改为动效星星左边的手绘图标按钮（D104）：新增 `doodle-theme.tsx`（月亮和星星 / 太阳 / 落日 / 花）和 `nextShelfTheme()`，点一下四套轮流；头像菜单只剩管理后台和退出登录；隔离环境浏览器实测轮流切换、刷新后保持、收藏页也有、系统减少动态效果时仍可切换、手机宽度不溢出 |
+| 2026-09-29 | 书架头像改为手绘默认头像 + 手绘风格的账户小弹窗（D105）：新增 `doodle-avatar.tsx`（头像、齿轮、门）和 `account-dialog.tsx`，去掉书架上的头像下拉菜单；隔离环境浏览器实测管理员（管理后台 + 退出）、读者（只有退出）、手机宽度、Esc 关闭、退出后回到登录页 |
+| 2026-09-29 | 管理后台顶栏加网站 logo 和"打开读者首页"图标（D106）；隔离环境浏览器实测 logo 加载、图标跳到 `/` 并显示读者书架、点 logo 回到绘本页 |
+| 2026-09-29 | 管理后台"邀请码"和"读者"合并为"用户管理"（D107）：新增 `users.tsx`（标题 + 标签，标签对应子路由 `/admin/users/invites`、`/admin/users/readers`），旧地址跳转，`PageHeader` 的标题改为可选，导航只剩一项；隔离环境浏览器实测标签切换、刷新和后退保持、生成邀请码、旧地址跳转、导航高亮 |

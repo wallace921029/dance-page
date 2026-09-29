@@ -1,32 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  LogOut,
-  Palette,
-  Settings,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "cn";
-import { meQuery, useLogout } from "@/api/auth";
+import { meQuery } from "@/api/auth";
 import { useShelf } from "@/api/shelf";
 import type { ShelfBook } from "@/api/types";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Empty,
   EmptyContent,
@@ -39,12 +20,15 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
 import { StageBrand, StageRoundButton } from "@/pages/stage/common";
 import { DoodleArrow } from "@/pages/stage/doodle-arrow";
+import { AccountDialog } from "@/pages/stage/account-dialog";
 import { DoodleHeart } from "@/pages/stage/doodle-heart";
+import { DoodleSparkle } from "@/pages/stage/doodle-sparkle";
+import { DoodleTheme } from "@/pages/stage/doodle-theme";
 import { ShelfBackdrop } from "@/pages/stage/shelf-backdrop";
 import { ShelfItem } from "@/pages/stage/shelf-item";
 import { ShelfSearch, type ShelfSearchHandle } from "@/pages/stage/shelf-search";
 import {
-  SHELF_THEME_ORDER,
+  nextShelfTheme,
   SHELF_THEMES,
   type ShelfTheme,
   type ShelfThemeId,
@@ -277,15 +261,11 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
             />
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <ThemeButton theme={theme} onThemeChange={setTheme} />
+            <MotionButton shelfMotion={shelfMotion} />
             <FavoritesButton favoritesMode={favoritesMode} />
             {me && (
-              <UserMenu
-                username={me.username}
-                isAdmin={me.role === "admin"}
-                theme={theme}
-                onThemeChange={setTheme}
-                shelfMotion={shelfMotion}
-              />
+              <AccountDialog username={me.username} isAdmin={me.role === "admin"} />
             )}
           </div>
         </header>
@@ -399,6 +379,72 @@ export default function ShelfPage({ mode = "all" }: { mode?: "all" | "favorites"
 }
 
 /**
+ * "书架主题"切换（D104）：动效星星左边的手绘图标，显示当前主题，点一下换到下一套，四套轮流。
+ * 换主题时图标弹一下（系统开启"减少动态效果"时不弹）
+ */
+function ThemeButton({
+  theme,
+  onThemeChange,
+}: {
+  theme: ShelfTheme;
+  onThemeChange: (id: ShelfThemeId) => void;
+}) {
+  const next = SHELF_THEMES[nextShelfTheme(theme.id)];
+  const label = `书架主题：${theme.name}，点一下换成${next.name}`;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-lg"
+      aria-label={label}
+      title={label}
+      onClick={() => onThemeChange(next.id)}
+      className="size-11 -rotate-3 rounded-full bg-transparent p-1 transition-transform hover:scale-110 hover:bg-transparent focus-visible:ring-stage-spot/60 active:scale-95 motion-reduce:transition-none dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-full"
+    >
+      {/* key 跟着主题变：每次换主题图标重新弹一下 */}
+      <DoodleTheme
+        key={theme.id}
+        id={theme.id}
+        className="size-full animate-sticker-pop drop-shadow-[0_2px_2px_rgba(30,20,50,.35)] motion-reduce:animate-none"
+      />
+    </Button>
+  );
+}
+
+/**
+ * "书本动效"开关（D103）：收藏爱心左边的手绘小星星，点一下开 / 关。
+ * 系统开启"减少动态效果"时动效一律关闭，这个按钮显示为关着且不能点
+ */
+function MotionButton({ shelfMotion }: { shelfMotion: ReturnType<typeof useShelfMotion> }) {
+  const on = shelfMotion.enabled;
+  const label = shelfMotion.reduced
+    ? "书本动效（系统已减少动态效果）"
+    : on
+      ? "关闭书本动效"
+      : "打开书本动效";
+  return (
+    <Button
+      variant="ghost"
+      size="icon-lg"
+      aria-label={label}
+      aria-pressed={on}
+      aria-disabled={shelfMotion.reduced || undefined}
+      title={label}
+      onClick={() => {
+        if (!shelfMotion.reduced) shelfMotion.setPreference(!shelfMotion.preference);
+      }}
+      className={cn(
+        "size-11 -rotate-6 rounded-full bg-transparent p-1 transition-transform hover:scale-110 hover:bg-transparent focus-visible:ring-stage-spot/60 active:scale-95 motion-reduce:transition-none dark:hover:bg-transparent [&_svg:not([class*='size-'])]:size-full",
+        // 打开时像被点亮的贴纸：微微歪着，星星本身是金黄色
+        on && "rotate-6",
+        shelfMotion.reduced && "cursor-not-allowed opacity-60 hover:scale-100 active:scale-100",
+      )}
+    >
+      <DoodleSparkle on={on} className="size-full drop-shadow-[0_2px_2px_rgba(30,20,50,.35)]" />
+    </Button>
+  );
+}
+
+/**
  * 头像左侧的"我的收藏"入口（D58）：手绘爱心。
  * 在收藏页显示为选中状态，再点一下回到全部绘本
  */
@@ -476,88 +522,6 @@ function ShelfPageButton({
         className="size-full drop-shadow-[0_2px_2px_rgba(30,20,50,.35)]"
       />
     </Button>
-  );
-}
-
-function UserMenu({
-  username,
-  isAdmin,
-  theme,
-  onThemeChange,
-  shelfMotion,
-}: {
-  username: string;
-  isAdmin: boolean;
-  theme: ShelfTheme;
-  onThemeChange: (id: ShelfThemeId) => void;
-  shelfMotion: ReturnType<typeof useShelfMotion>;
-}) {
-  const navigate = useNavigate();
-  const logout = useLogout();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label="账户"
-        render={<Button variant="ghost" size="icon-lg" className="size-11 rounded-full p-0" />}
-      >
-        <Avatar className="size-11">
-          <AvatarFallback className={cn("text-lg", theme.avatar)}>
-            {username.slice(0, 1).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{username}</DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex items-center gap-1.5">
-            <Palette className="size-3.5" />
-            书架主题
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={theme.id}
-            onValueChange={(value) => onThemeChange(value as ShelfThemeId)}
-          >
-            {SHELF_THEME_ORDER.map((id) => (
-              <DropdownMenuRadioItem key={id} value={id} closeOnClick>
-                <span
-                  aria-hidden
-                  className="size-4 rounded-full ring-1 ring-foreground/15"
-                  style={{ background: SHELF_THEMES[id].swatch }}
-                />
-                {SHELF_THEMES[id].name}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuCheckboxItem
-            checked={shelfMotion.preference && !shelfMotion.reduced}
-            disabled={shelfMotion.reduced}
-            onCheckedChange={(checked) => shelfMotion.setPreference(checked)}
-            closeOnClick={false}
-          >
-            <Sparkles />
-            {shelfMotion.reduced ? "书本动效（系统已减少动态效果）" : "书本动效"}
-          </DropdownMenuCheckboxItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        {isAdmin && (
-          <DropdownMenuItem onClick={() => navigate("/admin/books")}>
-            <Settings />
-            管理后台
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          onClick={() =>
-            logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) })
-          }
-        >
-          <LogOut />
-          退出登录
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
