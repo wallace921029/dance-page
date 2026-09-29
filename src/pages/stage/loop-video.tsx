@@ -4,6 +4,75 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "cn";
 
+// 视频整个下载到内存里缓存起来（D117）：书架翻页、阅读页翻页会卸载再重建 <video>，
+// 交给浏览器自己取的话，iPad Safari 每次都要重新分段请求、等缓冲，封面会静止好一会儿才动。
+// 动画都只有几秒，放内存里没问题；总量有上限，最久没用的先丢（正在播放的不丢）。
+const MAX_CACHE_BYTES = 64 * 1024 * 1024;
+
+type CachedVideo = { url: string; size: number; refs: number };
+
+// Map 的插入顺序就是最近使用的顺序：最久没用的在最前面
+const cache = new Map<string, CachedVideo>();
+const pending = new Map<string, Promise<CachedVideo | null>>();
+
+function trimCache() {
+  let total = 0;
+  for (const entry of cache.values()) total += entry.size;
+  for (const [src, entry] of cache) {
+    if (total <= MAX_CACHE_BYTES) return;
+    if (entry.refs > 0) continue;
+    URL.revokeObjectURL(entry.url);
+    cache.delete(src);
+    total -= entry.size;
+  }
+}
+
+function loadVideo(src: string): Promise<CachedVideo | null> {
+  const hit = cache.get(src);
+  if (hit) {
+    cache.delete(src);
+    cache.set(src, hit);
+    return Promise.resolve(hit);
+  }
+  let request = pending.get(src);
+  if (!request) {
+    request = fetch(src)
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))))
+      .then((blob) => {
+        const entry = { url: URL.createObjectURL(blob), size: blob.size, refs: 0 };
+        cache.set(src, entry);
+        trimCache();
+        return entry;
+      })
+      .catch(() => null)
+      .finally(() => pending.delete(src));
+    pending.set(src, request);
+  }
+  return request;
+}
+
+/** 返回可以给 <video> 用的地址：缓存好的本地地址；下载失败时退回原地址；下载完成前为 undefined */
+function useCachedVideoUrl(src: string) {
+  const [state, setState] = useState<{ src: string; url: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    let held: CachedVideo | null = null;
+    void loadVideo(src).then((entry) => {
+      if (cancelled) return;
+      if (entry) {
+        entry.refs += 1;
+        held = entry;
+      }
+      setState({ src, url: entry?.url ?? src });
+    });
+    return () => {
+      cancelled = true;
+      if (held) held.refs -= 1;
+    };
+  }, [src]);
+  return state?.src === src ? state.url : undefined;
+}
+
 export function LoopVideo({
   src,
   active = true,
@@ -18,10 +87,11 @@ export function LoopVideo({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const url = useCachedVideoUrl(src);
 
   useEffect(() => {
     const video = ref.current;
-    if (!video) return;
+    if (!video || !url) return;
     if (!active) {
       video.pause();
       return;
@@ -39,18 +109,18 @@ export function LoopVideo({
       observer.disconnect();
       video.pause();
     };
-  }, [active, src]);
+  }, [active, url]);
 
   const visible = active && playing;
   return (
     <video
       ref={ref}
-      src={src}
+      src={url}
       aria-hidden
       muted
       loop
       playsInline
-      preload="metadata"
+      preload="auto"
       disablePictureInPicture
       onPlaying={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
