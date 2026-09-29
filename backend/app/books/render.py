@@ -155,7 +155,9 @@ def render_pdf(
             page.close()
 
             rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
-            strips.append((rgb[:, :SEAM_COLUMNS], rgb[:, -SEAM_COLUMNS:]))
+            # 必须 copy：切片只是视图，会让整页 float32 数组（约 35MB）一直留在内存里，
+            # 整本书累积会撑爆内存
+            strips.append((rgb[:, :SEAM_COLUMNS].copy(), rgb[:, -SEAM_COLUMNS:].copy()))
             image.save(pages_dir / page_file_name(index), "WEBP", quality=quality)
             pages.append(RenderedPage(image.width, image.height))
 
