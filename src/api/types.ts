@@ -39,6 +39,9 @@ export interface AdminBook {
   processing_error: string | null;
   progress: { done: number; total: number } | null;
   cover_url: string | null;
+  cover_video_ready: boolean;
+  dance_ready: boolean;
+  voice_ready: boolean;
   created_at: string;
   updated_at: string;
 }

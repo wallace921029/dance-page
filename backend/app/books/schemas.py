@@ -179,6 +179,9 @@ class AdminBookOut(BaseModel):
     # 处理中时的拆页进度
     progress: Progress | None
     cover_url: str | None
+    cover_video_ready: bool
+    dance_ready: bool
+    voice_ready: bool
     created_at: datetime
     updated_at: datetime
 
@@ -207,6 +210,9 @@ class AdminBookOut(BaseModel):
             processing_error=book.processing_error,
             progress=progress,
             cover_url=cover_url(book),
+            cover_video_ready=book.cover_video_status == "ready",
+            dance_ready=book.dance_ready_at is not None,
+            voice_ready=book.voice_ready_at is not None,
             created_at=book.created_at,
             updated_at=book.updated_at,
         )

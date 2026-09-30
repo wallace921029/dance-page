@@ -45,7 +45,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
 import { formatDateTime, formatFileSize, titleFromFilename } from "@/lib/format";
 import { DeleteBookButton, VisibilityButton } from "@/pages/admin/book-actions";
-import { BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
+import { BookAiStatusIcons, BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
 import { PageHeader } from "@/pages/admin/layout";
 import { AnimatedTableRow, Reveal } from "@/pages/admin/motion";
 import { ErrorState, LoadingState } from "@/pages/admin/query-state";
@@ -337,7 +337,7 @@ export default function AdminBooksPage() {
                 <TableRow>
                   <TableHead className="w-16">封面</TableHead>
                   <TableHead>书名</TableHead>
-                  <TableHead className="w-40">状态</TableHead>
+                  <TableHead className="w-48">状态</TableHead>
                   <TableHead className="w-16 text-right">页数</TableHead>
                   <TableHead className="w-24 text-right">大小</TableHead>
                   <TableHead className="w-40">上传时间</TableHead>
@@ -448,7 +448,10 @@ function BookRow({ book, index }: { book: AdminBook; index: number }) {
       </TableCell>
       <TableCell>
         <div className="space-y-1.5">
-          <BookStatusBadge book={book} />
+          <div className="flex items-center gap-2">
+            <BookStatusBadge book={book} />
+            <BookAiStatusIcons book={book} />
+          </div>
           {book.processing_status === "processing" && <ProcessingProgress book={book} />}
         </div>
       </TableCell>

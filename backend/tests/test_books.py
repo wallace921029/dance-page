@@ -20,6 +20,9 @@ def test_upload_creates_processing_book(admin, settings, pdf_bytes):
     assert book["progress"] == {"done": 0, "total": 0}
     assert book["visibility"] == "listed"
     assert book["cover_url"] is None
+    assert book["cover_video_ready"] is False
+    assert book["dance_ready"] is False
+    assert book["voice_ready"] is False
     assert storage.original_pdf_path(settings, book["id"]).read_bytes() == pdf_bytes
 
 
@@ -273,3 +276,39 @@ def test_unlisted_book_hidden_from_reader_but_admin_can_preview(admin, reader, r
     assert reader.get(ready_book["pages"][0]["url"]).status_code == 404
     assert admin.get(f"/api/books/{book_id}").status_code == 200
     assert admin.get(ready_book["pages"][0]["url"]).status_code == 200
+
+
+def test_admin_books_ai_ready_status(admin, ready_book, app):
+    from app.clock import utcnow
+    from app.models import Book
+
+    book_id = ready_book["id"]
+
+    # 初始状态均未 ready
+    b = admin.get(f"/api/admin/books/{book_id}").json()
+    assert b["cover_video_ready"] is False
+    assert b["dance_ready"] is False
+    assert b["voice_ready"] is False
+
+    # 模拟就绪
+    with app.state.session_factory() as db:
+        book = db.get(Book, book_id)
+        assert book is not None
+        book.cover_video_status = "ready"
+        book.dance_ready_at = utcnow()
+        book.voice_ready_at = utcnow()
+        db.commit()
+
+    # 详情接口返回 ready
+    b = admin.get(f"/api/admin/books/{book_id}").json()
+    assert b["cover_video_ready"] is True
+    assert b["dance_ready"] is True
+    assert b["voice_ready"] is True
+
+    # 列表接口返回 ready
+    books = admin.get("/api/admin/books").json()
+    matched = next(item for item in books if item["id"] == book_id)
+    assert matched["cover_video_ready"] is True
+    assert matched["dance_ready"] is True
+    assert matched["voice_ready"] is True
+
