@@ -210,6 +210,24 @@ def test_admin_list_newest_first(admin, pdf_bytes):
     assert [b["id"] for b in admin.get("/api/admin/books").json()] == [second["id"], first["id"]]
 
 
+def test_admin_list_search(admin, pdf_bytes):
+    book_a = upload(admin, pdf_bytes, "大怪兽.pdf").json()
+    book_b = upload(admin, pdf_bytes, "小怪兽.pdf").json()
+    book_c = upload(admin, pdf_bytes, "红苹果.pdf").json()
+
+    # 搜书名
+    res = admin.get("/api/admin/books?q=怪兽").json()
+    assert [b["id"] for b in res] == [book_b["id"], book_a["id"]]
+
+    # 搜不存在的
+    res = admin.get("/api/admin/books?q=香蕉").json()
+    assert res == []
+
+    # 搜原文件名
+    res = admin.get("/api/admin/books?q=红苹果.pdf").json()
+    assert [b["id"] for b in res] == [book_c["id"]]
+
+
 # ---------- 阅读端 ----------
 
 

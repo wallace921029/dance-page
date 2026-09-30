@@ -1,19 +1,26 @@
-import { Fragment, useEffect, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ImageOff, Upload } from "lucide-react";
+import { BookOpen, ImageOff, Search, Upload, X } from "lucide-react";
 import { adminBookKeys, uploadBook, useAdminBooks } from "@/api/books";
 import type { AdminBook } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   Pagination,
   PaginationContent,
@@ -36,7 +43,7 @@ import {
 import { toast } from "@/components/ui/toast";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { getErrorMessage } from "@/lib/api";
-import { formatDateTime, formatFileSize } from "@/lib/format";
+import { formatDateTime, formatFileSize, titleFromFilename } from "@/lib/format";
 import { DeleteBookButton, VisibilityButton } from "@/pages/admin/book-actions";
 import { BookStatusBadge, ProcessingProgress } from "@/pages/admin/book-status";
 import { PageHeader } from "@/pages/admin/layout";
@@ -47,6 +54,41 @@ const MAX_UPLOAD_MB = 200;
 const PAGE_SIZE = 10;
 
 type UploadTask = { id: number; name: string; progress: number };
+
+/** 搜索与比对时忽略大小写和所有空格 */
+function normalizeText(text: string) {
+  return text.toLowerCase().replace(/\s+/g, "");
+}
+
+/** 去除书名两端可能带有的书名号或尖括号 */
+function stripBookMarks(text: string) {
+  return text.replace(/^[《<]/, "").replace(/[》>]$/, "").trim();
+}
+
+/** 预查重判断：书名或原始文件名一致则视为重复绘本 */
+function isDuplicateBook(
+  candidateTitle: string,
+  filename: string,
+  existingBook: { title: string; original_filename: string },
+) {
+  const normCandidateTitle = normalizeText(stripBookMarks(candidateTitle));
+  const normExistingTitle = normalizeText(stripBookMarks(existingBook.title));
+  if (normCandidateTitle && normExistingTitle && normCandidateTitle === normExistingTitle) {
+    return true;
+  }
+
+  const normCandidateFilename = normalizeText(filename);
+  const normExistingFilename = normalizeText(existingBook.original_filename);
+  if (
+    normCandidateFilename &&
+    normExistingFilename &&
+    normCandidateFilename === normExistingFilename
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 function searchParamsForPage(searchParams: URLSearchParams, page: number) {
   const params = new URLSearchParams(searchParams);
@@ -62,13 +104,38 @@ export default function AdminBooksPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploads, setUploads] = useState<UploadTask[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("q") ?? "";
+
+  const updateQuery = (nextQuery: string) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (nextQuery.trim()) next.set("q", nextQuery.trim());
+        else next.delete("q");
+        next.delete("page"); // 搜索关键词变动时切回第 1 页
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const filteredBooks = useMemo(() => {
+    const norm = normalizeText(query);
+    if (!norm) return books;
+    return books?.filter(
+      (b) =>
+        normalizeText(b.title).includes(norm) ||
+        normalizeText(b.original_filename).includes(norm),
+    );
+  }, [books, query]);
+
   const pageParam = searchParams.get("page");
   const parsedPage = Number(pageParam);
   const requestedPage =
     pageParam !== null && Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
-  const pageCount = Math.max(1, Math.ceil((books?.length ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((filteredBooks?.length ?? 0) / PAGE_SIZE));
   const page = Math.min(requestedPage, pageCount);
-  const pageBooks = books?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageBooks = filteredBooks?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageNumbers =
     pageCount <= 7
       ? Array.from({ length: pageCount }, (_, i) => i + 1)
@@ -77,10 +144,14 @@ export default function AdminBooksPage() {
           .sort((a, b) => a - b);
 
   useEffect(() => {
-    if (books && pageParam !== null && pageParam !== (page === 1 ? "1" : String(page))) {
+    if (
+      filteredBooks &&
+      pageParam !== null &&
+      pageParam !== (page === 1 ? "1" : String(page))
+    ) {
       setSearchParams((current) => searchParamsForPage(current, page), { replace: true });
     }
-  }, [books, pageParam, page, setSearchParams]);
+  }, [filteredBooks, pageParam, page, setSearchParams]);
 
   const pageHref = (target: number) => {
     const params = searchParamsForPage(searchParams, target).toString();
@@ -97,11 +168,43 @@ export default function AdminBooksPage() {
     setSearchParams((current) => searchParamsForPage(current, target));
   };
 
-  // 多个文件依次上传，避免同时占满带宽
+  // 多个文件依次上传，上传前预查重并避免同时占满带宽
   const uploadFiles = async (files: File[]) => {
-    const tasks = files.map((file, i) => ({ id: Date.now() + i, name: file.name, progress: 0 }));
+    // 1. 预查重：对比已存在的绘本及本次选中的其他文件
+    const toUpload: File[] = [];
+    const seenBatchTitles: string[] = [];
+
+    for (const file of files) {
+      const candidateTitle = titleFromFilename(file.name);
+      const existing = books?.find((b) => isDuplicateBook(candidateTitle, file.name, b));
+      const duplicateInBatch = seenBatchTitles.some(
+        (t) => normalizeText(stripBookMarks(t)) === normalizeText(stripBookMarks(candidateTitle)),
+      );
+
+      if (existing || duplicateInBatch) {
+        const matchName = existing?.title || candidateTitle;
+        const formattedTitle =
+          matchName.startsWith("《") && matchName.endsWith("》")
+            ? matchName
+            : `《${matchName}》`;
+        toast.add({
+          title: `${formattedTitle} 绘本已经存在`,
+          description: "已自动忽略上传",
+          type: "warning",
+        });
+        continue;
+      }
+
+      seenBatchTitles.push(candidateTitle);
+      toUpload.push(file);
+    }
+
+    if (toUpload.length === 0) return;
+
+    // 2. 依次执行上传
+    const tasks = toUpload.map((file, i) => ({ id: Date.now() + i, name: file.name, progress: 0 }));
     setUploads((current) => [...current, ...tasks]);
-    for (const [i, file] of files.entries()) {
+    for (const [i, file] of toUpload.entries()) {
       const task = tasks[i];
       const update = (progress: number) =>
         setUploads((current) => current.map((t) => (t.id === task.id ? { ...t, progress } : t)));
@@ -130,6 +233,28 @@ export default function AdminBooksPage() {
         title="绘本"
         description="上传 PDF 后会自动拆页，处理完成即上架，读者可在书架上看到。"
       >
+        <InputGroup className="w-48 sm:w-64">
+          <InputGroupAddon align="inline-start">
+            <Search className="size-4" />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            placeholder="搜索绘本..."
+            value={query}
+            onChange={(e) => updateQuery(e.target.value)}
+          />
+          {query && (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                aria-label="清空搜索"
+                onClick={() => updateQuery("")}
+              >
+                <X className="size-3.5" />
+              </InputGroupButton>
+            </InputGroupAddon>
+          )}
+        </InputGroup>
         <Input
           ref={fileInput}
           type="file"
@@ -185,6 +310,25 @@ export default function AdminBooksPage() {
             </EmptyHeader>
           </Empty>
         </Reveal>
+      ) : filteredBooks && filteredBooks.length === 0 ? (
+        <Reveal>
+          <Empty className="border bg-background">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search />
+              </EmptyMedia>
+              <EmptyTitle>未找到匹配的绘本</EmptyTitle>
+              <EmptyDescription>
+                没有找到与“{query.trim()}”相关的绘本，换个关键词试试？
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={() => updateQuery("")}>
+                清除搜索
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </Reveal>
       ) : (
         <Reveal>
           <Card className="gap-0 py-0">
@@ -206,11 +350,21 @@ export default function AdminBooksPage() {
                 ))}
               </TableBody>
             </Table>
-            {pageCount > 1 && (
+            {(pageCount > 1 || query.trim() !== "") && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
                 <span className="text-sm text-muted-foreground">
-                  第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, books.length)} 条，共{" "}
-                  {books.length} 本
+                  {query.trim() ? (
+                    <>
+                      第 {(page - 1) * PAGE_SIZE + 1}–
+                      {Math.min(page * PAGE_SIZE, filteredBooks?.length ?? 0)} 条，找到{" "}
+                      {filteredBooks?.length ?? 0} 本（共 {books.length} 本）
+                    </>
+                  ) : (
+                    <>
+                      第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, books.length)}{" "}
+                      条，共 {books.length} 本
+                    </>
+                  )}
                 </span>
                 <Pagination
                   aria-label="绘本列表分页"

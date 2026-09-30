@@ -1,7 +1,7 @@
 import shutil
 
 from fastapi import APIRouter, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.books import storage
@@ -66,10 +66,14 @@ def upload_book(
 
 
 @router.get("")
-def list_books(_admin: CurrentStaff, db: DbSession) -> list[AdminBookOut]:
-    books = db.scalars(
-        select(Book).options(selectinload(Book.jobs)).order_by(Book.created_at.desc())
-    )
+def list_books(_admin: CurrentStaff, db: DbSession, q: str | None = None) -> list[AdminBookOut]:
+    stmt = select(Book).options(selectinload(Book.jobs)).order_by(Book.created_at.desc())
+    if q and q.strip():
+        search_pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(Book.title.ilike(search_pattern), Book.original_filename.ilike(search_pattern))
+        )
+    books = db.scalars(stmt)
     return [AdminBookOut.of(b) for b in books]
 
 
